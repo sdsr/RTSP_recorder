@@ -1,0 +1,23 @@
+# Per-device settings and credentials
+recording.json
+recording.ini
+setup.ini
+client*.ini
+*.key
+.env
+.env.*
+
+# Runtime state, recordings and local Python caches
+__pycache__/
+*.py[cod]
+.test-*/
+.weather-forecast.json
+.weather-http-*.json
+.weather-http-*.lock
+.recorder-status.json
+*.mp4
+*.mkv
+*.log
+runtime/
+captures/
+recordings/

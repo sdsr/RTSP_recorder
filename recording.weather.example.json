@@ -1,0 +1,31 @@
+{
+  "setup_ini": "auto",
+  "output_dir": "auto",
+  "intersection_name": "요트경기장",
+  "weather": "",
+  "recording_dates": [],
+  "cameras": "auto",
+  "time_ranges": [
+    "06:00-11:00",
+    "12:00-17:00",
+    "18:00-22:00"
+  ],
+  "segment_minutes": 30,
+  "retention_days": 0,
+  "min_free_gb": 5,
+  "weather_condition": {
+    "enabled": false,
+    "region": {
+      "sido": "부산광역시",
+      "sigungu": "해운대구",
+      "eupmyeondong": ""
+    },
+    "conditions": [
+      "rain"
+    ],
+    "provider": "open_meteo",
+    "api_key_file": "kma_service.key",
+    "poll_minutes": 30,
+    "met_contact": ""
+  }
+}

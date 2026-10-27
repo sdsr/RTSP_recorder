@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="ED 카메라 예약 녹화 도구의 설치, 시험 녹화, 자동 실행, 운영 및 장애 조치를 위한 유지보수 설명서">
+<title>ED 카메라 예약 녹화 | 유지보수 설명서</title>
+<style>
+:root{--ink:#172439;--muted:#46546a;--accent:#294f91;--line:#d6deea;--paper:#ffffff;--ground:#edf1f6;--soft:#eaf0fb;--amber:#785211;--amberbg:#fff4d9;--mono:Consolas,"Liberation Mono",monospace}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--ground);color:var(--ink);font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:15px;line-height:1.7;word-break:keep-all}a{color:var(--accent);text-underline-offset:3px}button,a,input{touch-action:manipulation}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #b67418;outline-offset:4px}.skip{position:fixed;left:12px;top:-80px;background:var(--paper);padding:10px;z-index:20}.skip:focus{top:10px}
+.sidebar{position:fixed;inset:0 auto 0 0;width:242px;padding:34px 22px;background:#172944;color:#edf2fc;display:flex;flex-direction:column;z-index:5}.brand{font-size:13px;font-weight:800;letter-spacing:.15em}.side-title{font-size:23px;font-weight:750;line-height:1.45;margin:27px 0 26px}.sidebar nav{display:grid;gap:3px}.sidebar nav a{color:#d3ddee;text-decoration:none;font-size:13px;padding:9px 11px;border-radius:3px;display:flex;gap:13px}.sidebar nav a span{font-size:11px;opacity:.7;width:16px}.sidebar nav a:hover,.sidebar nav a.active{background:#294466;color:#ffffff}.side-meta{font-size:11px;color:#c4cfdf;margin-top:auto;padding-top:22px;line-height:1.9}.toolbar{margin-left:242px;max-width:1128px;padding:24px 36px 16px;display:flex;justify-content:space-between;align-items:center;gap:16px}.toolbar small{color:var(--muted)}.toolbar-actions{display:flex;gap:10px;align-items:center}.toolbar button,.toolbar a{padding:8px 13px;border:1px solid #b6c3d6;border-radius:4px;background:transparent;color:var(--ink);font-size:12px;text-decoration:none}.toolbar button{background:var(--accent);color:#fff;border-color:var(--accent)}
+main{margin-left:242px;max-width:1128px;padding:0 36px 50px}.sheet{background:var(--paper);padding:44px 48px 48px;margin-bottom:26px;border:1px solid var(--line);scroll-margin-top:24px;position:relative}.eyebrow{font-size:11px;letter-spacing:.16em;font-weight:750;color:var(--accent);margin:0 0 15px}.page-head{display:flex;gap:16px;align-items:baseline;border-bottom:2px solid var(--ink);padding-bottom:17px;margin-bottom:22px}.page-no{font-size:13px;font-weight:750;color:var(--accent)}h1,h2,h3,h4{line-height:1.35;margin:0;font-weight:750;letter-spacing:-.035em}h1{font-size:clamp(32px,3.5vw,47px);margin:19px 0 23px;line-height:1.3}h2{font-size:29px}h3{font-size:18px;margin:24px 0 10px}h4{font-size:15px;margin:18px 0 7px}.lead{font-size:18px;line-height:1.75;color:var(--muted);max-width:650px}.intro{margin-bottom:20px}.tag{display:inline-block;font-size:11px;font-weight:650;padding:4px 9px;border:1px solid #b0c2e0;border-radius:2px;margin:0 6px 8px 0;color:var(--accent)}p{margin:9px 0 13px}.small{font-size:12px;color:var(--muted)}.note,.caution{padding:13px 17px;margin:17px 0;background:var(--soft);font-size:13px}.caution{background:var(--amberbg);color:var(--amber)}.note strong,.caution strong{display:block;margin-bottom:4px}.note p:last-child,.caution p:last-child{margin-bottom:0}.flow{display:grid;grid-template-columns:1fr 50px 1fr 50px 1fr;align-items:center;margin:30px 0 25px}.flow-node{border-top:2px solid var(--accent);padding:15px 5px 0}.flow-node b{display:block;font-size:18px}.flow-node small{font-size:12px;color:var(--muted)}.arrow{text-align:center;color:var(--accent);font-size:22px}.meta-grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);margin-top:30px}.meta-grid>div{padding:15px 0;border-bottom:1px solid var(--line)}.meta-grid dt{font-size:11px;color:var(--muted)}.meta-grid dd{margin:4px 0 0;font-weight:650;font-size:14px}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:23px}.two-col>div h3:first-child{margin-top:6px}ul,ol{padding-left:21px;margin:9px 0 15px}li{margin:5px 0}li::marker{color:var(--accent)}.compact li{margin:3px 0}.table-wrap{overflow-x:auto;margin:13px 0 18px}table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}th{font-weight:700;background:#e9eef7;color:#243a5b}th:first-child,td:first-child{padding-left:9px}td p{margin:0}table code{font-size:11px;word-break:break-word}code{font-family:var(--mono);font-size:.9em;overflow-wrap:anywhere;color:#203654}.codebox{position:relative;margin:12px 0 16px;border:1px solid #ccd6e6;background:#f3f5f9;border-radius:3px}.code-label{padding:7px 13px;border-bottom:1px solid #d9e0eb;font-size:10px;font-weight:700;color:#3c506d;letter-spacing:.05em;min-height:31px}.codebox pre{margin:0;padding:12px 15px;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;font:12px/1.65 var(--mono);color:#1e2e46;tab-size:2}.codebox pre code{font:inherit;color:inherit;overflow-wrap:inherit}.copy{position:absolute;right:7px;top:4px;border:1px solid #bccbe0;background:var(--paper);color:var(--accent);border-radius:3px;padding:2px 9px;font-size:10px}.step-label{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.03em;margin-bottom:5px}.checklist{list-style:none;padding:0;display:grid;gap:0}.checklist li{margin:0;border-bottom:1px solid var(--line);padding:9px 2px}.checklist label{display:flex;align-items:flex-start;gap:11px;font-size:13px}.checklist input{margin-top:6px;accent-color:var(--accent);width:15px;height:15px;flex:0 0 15px}.signoff{display:grid;grid-template-columns:1fr 1fr;gap:17px;margin:22px 0}.signoff div{border-bottom:1px solid #8b9cb5;padding:10px 0;font-size:12px}.caption{font-size:11px;color:var(--muted);margin-top:5px}.refstrip{border-top:1px solid var(--line);margin-top:25px;padding-top:12px;font-size:11px;color:var(--muted)}.status{position:fixed;right:24px;bottom:22px;background:#172944;color:#fff;padding:10px 18px;border-radius:4px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s;z-index:20}.status.show{opacity:1}
+.code-label{padding-right:58px}
+@media(max-width:1120px){.sidebar{width:206px;padding:26px 15px}.toolbar,main{margin-left:206px}.toolbar{padding:18px 22px}main{padding:0 22px 35px}.sheet{padding:34px 30px}.side-title{font-size:21px}}
+@media(max-width:760px){.sidebar{position:static;width:auto;padding:20px 20px 14px}.brand{font-size:11px}.side-title{font-size:21px;margin:12px 0}.side-title br{display:none}.sidebar nav{display:flex;flex-wrap:wrap;gap:2px}.sidebar nav a{font-size:11px;padding:5px 7px;gap:5px}.sidebar nav a span{width:auto}.side-meta{display:none}.toolbar,main{margin-left:0}.toolbar{padding:16px;flex-wrap:wrap}.toolbar small{font-size:10px}.toolbar-actions{gap:6px}.toolbar button,.toolbar a{font-size:11px;padding:6px 9px}main{padding:0 12px 25px}.sheet{padding:25px 20px;margin-bottom:15px}h1{font-size:34px}h2{font-size:24px}.page-head{gap:10px}.lead{font-size:16px}.two-col{grid-template-columns:1fr;gap:0}.flow{grid-template-columns:1fr 25px 1fr 25px 1fr}.flow-node b{font-size:15px}.flow-node small{font-size:10px}.codebox pre{font-size:11px}.table-wrap table{min-width:490px}.meta-grid dd{font-size:12px}.signoff{grid-template-columns:1fr}.small{font-size:11px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.status{transition:none}}
+
+body{font-size:1rem;line-height:1.75;font-kerning:normal}
+.sidebar{overflow-y:auto}.sidebar nav a{font-size:.78rem;padding:6px 9px}
+.side-title{margin:20px 0}.side-meta{padding-top:15px}
+.small,.note,.caution{font-size:.9rem}.codebox pre{font-size:.875rem;line-height:1.65}
+.code-label{font-size:.75rem}.step-label{font-size:.8rem}
+table{font-size:.9rem}table code{font-size:.8rem}.caption,.refstrip{font-size:.8rem}
+.flow{align-items:start}.arrow{padding-top:16px}
+.page-head{border-color:#294f91}.page-no{font-variant-numeric:tabular-nums}
+@page{size:A4;margin:17mm 17mm 18mm}
+@media print{
+ html{scroll-behavior:auto}
+ body{background:white;color:#172439;font-size:11.5pt;line-height:1.65;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ .sidebar,.toolbar,.copy,.status,.skip{display:none!important}
+ main{margin:0;padding:0;max-width:none}
+ .sheet{background:white;border:0;margin:0;padding:0;break-after:page}
+ .sheet:last-child{break-after:auto}
+ .eyebrow{font-size:9pt;margin-bottom:14pt}
+ .page-head{padding-bottom:11pt;margin-bottom:16pt;gap:12pt;border-bottom:2pt solid #294f91}
+ .page-no{font-size:12pt}h1{font-size:31pt;margin:20pt 0;line-height:1.32}
+ h2{font-size:23pt}h3{font-size:14pt;margin:14pt 0 7pt}h4{font-size:12pt;margin:14pt 0 7pt}
+ .lead{font-size:14pt;line-height:1.7}.tag{font-size:9pt}
+ .small{font-size:10.5pt;line-height:1.65;color:#46546a}
+ p{margin:7pt 0 10pt;orphans:3;widows:3}
+ .note,.caution{font-size:10.5pt;padding:11pt 13pt;margin:14pt 0;break-inside:avoid;line-height:1.65}
+ .codebox{margin:9pt 0 11pt;break-inside:avoid;border-color:#ccd6e6}
+ .code-label{padding:6pt 11pt;min-height:0;font-size:9pt;color:#344862}
+ .codebox pre{font-size:10pt;line-height:1.65;padding:11pt 12pt;white-space:pre-wrap;overflow:visible;overflow-wrap:normal;word-break:normal;color:#172439}
+ .table-wrap{overflow:visible;margin:12pt 0 15pt}.table-wrap table{min-width:0}
+ table{font-size:10.5pt;line-height:1.6}table code{font-size:9.5pt}
+ th,td{padding:9pt 9pt}th{background:#e9eef7;color:#213d65}tr{break-inside:avoid}thead{display:table-header-group}
+ ul,ol{margin:9pt 0 13pt}li{margin:5pt 0}
+ .flow{margin:28pt 0}.flow-node b{font-size:16pt}.flow-node small{font-size:10.5pt}
+ .meta-grid{margin-top:24pt}.meta-grid>div{padding:13pt 0}.meta-grid dt{font-size:9.5pt}.meta-grid dd{font-size:11.5pt}
+ .two-col{grid-template-columns:1fr 1fr;gap:16pt}.two-col .codebox pre{font-size:9.5pt}
+ .step-label{font-size:10pt;margin:13pt 0 6pt}
+ #test .codebox pre{line-height:1.55}
+ #change h3{margin-top:12pt}
+ .checklist li{padding:11pt 2pt}.checklist label{font-size:11.5pt;line-height:1.6}
+ .checklist input{appearance:none;border:1px solid #4b6080;border-radius:0;width:11pt;height:11pt;flex-basis:11pt;margin-top:5pt}
+ .checklist input:checked{background:#294f91}
+ .signoff{grid-template-columns:1fr 1fr;gap:20pt;margin:24pt 0}.signoff div{font-size:11pt;padding:12pt 0}
+ .caption,.refstrip{font-size:9.5pt;line-height:1.65}.refstrip{margin-top:20pt;padding-top:12pt}
+ h2,h3,h4,.step-label{break-after:avoid}a{color:inherit;text-decoration:none}
+}
+
+@media print{
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+
+@media print{
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+
+@media print{
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+
+@media print{
+ .page-head{margin-bottom:14pt}.codebox{margin-bottom:10pt}.codebox pre{padding:9pt 12pt}
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+
+@media print{
+ .page-head{margin-bottom:14pt}.codebox{margin-bottom:10pt}.codebox pre{padding:9pt 12pt}
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+
+@media print{
+ .page-head{margin-bottom:14pt}.codebox{margin-bottom:10pt}.codebox pre{padding:9pt 12pt}
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+
+@media print{
+ .page-head{margin-bottom:14pt}.codebox{margin-bottom:10pt}.codebox pre{padding:9pt 12pt}
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+
+@media print{
+ .page-head{margin-bottom:14pt}.codebox{margin-bottom:10pt}.codebox pre{padding:9pt 12pt}
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+
+@media print{
+ .page-head{margin-bottom:14pt}.codebox{margin-bottom:10pt}.codebox pre{padding:9pt 12pt}
+ #overview h1{font-size:28pt;margin:17pt 0}
+ #overview .meta-grid{margin-top:16pt}#overview .meta-grid>div{padding:10pt 0}
+ #camera p{margin-top:6pt;margin-bottom:9pt}
+ #handover .checklist li{padding:7pt 2pt}#handover .signoff{margin:16pt 0}
+ #handover .codebox{margin-top:6pt;margin-bottom:9pt}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#overview">본문으로 건너뛰기</a>
+<aside class="sidebar" aria-label="설명서 목차">
+  <div class="brand">GOOMI SIS / ED</div>
+  <div class="side-title">카메라 예약 녹화<br> 유지보수 설명서</div>
+  <nav><a href="#overview"><span>01</span>시작하기</a><a href="#ui-operations"><span>02</span>화면에서 녹화하기</a><a href="#ui-weather"><span>03</span>예보가 맞는 날 전체 녹화</a><a href="#ui-install"><span>04</span>처음 연결과 자동 실행</a><a href="#json-config"><span>05</span>JSON: 이름·날씨·저장 위치</a><a href="#json-dates"><span>06</span>JSON: 실행 날짜와 적용</a><a href="#config"><span>07</span>INI 방식: 기본 설정</a><a href="#schedule"><span>08</span>녹화 구간과 파일 길이</a><a href="#camera"><span>09</span>기존 카메라 설정 연결</a><a href="#storage"><span>10</span>저장 위치와 보관</a><a href="#service"><span>11</span>INI 설치와 변경 적용</a><a href="#test"><span>12</span>한 번만 시험 녹화</a><a href="#operate"><span>13</span>운영 상태와 영상 확인</a><a href="#filenames"><span>14</span>영상 파일명과 현장 정보</a><a href="#trouble"><span>15</span>장애 조치</a><a href="#handover"><span>16</span>인수인계와 중지</a></nav>
+  <div class="side-meta">유지보수팀 배포용 · 문서 4.1<br>2026.10.19 기준<br>Ubuntu / Python 3.8+ / FFmpeg</div>
+</aside>
+<div class="toolbar">
+  <small>OFFLINE MANUAL · 인터넷 연결 없이 열람 가능</small>
+  <div class="toolbar-actions"><a href="ED_카메라_예약녹화_유지보수_설명서.pdf">PDF 보기</a><button type="button" id="print">인쇄 / PDF 저장</button></div>
+</div>
+<main id="main"><section class="sheet" id="overview" aria-labelledby="title"><p class="eyebrow">FIELD OPERATIONS GUIDE / BROWSER CONTROL</p>
+<span class="tag">유지보수팀 배포용</span><span class="tag">코드는 한 파일만 복사</span>
+<h1 id="title">녹화 시작과 설정,<br>이제 화면에서 합니다.</h1>
+<p class="lead">시간표·날짜·지역을 고르고 시작 버튼을 누릅니다.<br>코드나 JSON 문법을 몰라도 사용할 수 있습니다.</p><div class="codebox"><div class="code-label">최신 record.py를 복사한 폴더에서 실행</div><pre><code>python3 record.py --config recording.json --ui</code></pre></div><div class="codebox"><div class="code-label">같은 ED 장비의 브라우저에서 열기</div><pre><code>http://127.0.0.1:8765/</code></pre></div><div class="note"><strong>화면과 지역 목록도 record.py 한 파일에 포함됩니다.</strong>설정 JSON이 없으면 자동 생성합니다. 기존 설정은 보존합니다. 카메라 설정을 선택하고 저장·검사한 뒤 시험 녹화를 시작하세요.</div><div class="codebox"><div class="code-label">배포 파일과 현장에서 생성되는 설정</div><pre><code>/home/dis/tools/           ← 예시: 다른 폴더도 가능
+├── record.py              ← 배포 시 복사하는 코드
+└── recording.json         ← 화면에서 편집하는 설정</code></pre></div>
+<dl class="meta-grid">
+<div><dt>기본 녹화 구간 · 한국 시간</dt><dd>06~11시 / 12~17시 / 18~22시</dd></div>
+<div><dt>카메라 주소</dt><dd>기존 setup.ini에서 읽음</dd></div>
+<div><dt>저장 형식 / 기본 파일 길이</dt><dd>MP4 / 30분 · 60분 선택 가능</dd></div>
+<div><dt>보관 기본값</dt><dd>자동 삭제 안 함 / 여유 5 GiB</dd></div>
+</dl><p class="small">Ubuntu/Linux, Python 3.8 이상과 FFmpeg가 필요합니다. 날씨 조건에는 인터넷이 필요합니다. Open-Meteo 개인용은 API 키 없이 사용할 수 있습니다. 실제 영상은 현장 시험으로 확인합니다.</p></section>
+<section class="sheet" id="ui-operations" aria-labelledby="ui-operations-title"><div class="page-head"><span class="page-no">02</span><h2 id="ui-operations-title">화면에서 녹화하기</h2></div><p>화면은 <strong>녹화 현황 / 시간표 · 날씨 / 장비 설정</strong>으로 나뉩니다. 처음에는 장비 설정을 확인한 뒤 녹화 현황에서 실행합니다.</p><div class="table-wrap"><table><thead><tr><th scope="col">작업</th><th scope="col">화면에서 할 일</th></tr></thead><tbody><tr><td>카메라 연결</td><td>장비 설정 → 설정 찾기 → 실제 운영 setup.ini 선택</td></tr><tr><td>일정 변경</td><td>시간표 · 날씨 → 시간 구간과 날짜 선택</td></tr><tr><td>저장 위치·분할 변경</td><td>장비 설정 → 저장 폴더와 파일 분할 길이 입력</td></tr><tr><td>변경 내용 적용</td><td>설정 저장 · 적용. 예약 녹화는 재시작하며, 시험 중에는 종료 후 저장합니다.</td></tr><tr><td>연결·저장 시험</td><td>녹화 현황 → 한 번만 녹화 → 5분 시험 녹화</td></tr><tr><td>정규 일정 실행</td><td>녹화 현황 → 예약 녹화 시작</td></tr><tr><td>현재 녹화 종료</td><td>녹화 현황 → 녹화 중지</td></tr></tbody></table></div><div class="note"><strong>5분 시험은 날짜·날씨 조건과 관계없이 실행합니다.</strong>지정한 시간이 끝나면 자동 종료합니다. 저장된 MP4를 재생해 대상 카메라와 실제 영상을 확인하세요.</div><h3>상태 읽기</h3><p>예약 대기는 프로그램이 시간표 또는 날씨 조건을 기다리는 상태입니다. 녹화 중은 실제 카메라 녹화 작업이 실행 중인 상태이며, 영상의 정상 재생까지 함께 확인합니다.</p><p>다른 터미널이나 기존 서비스가 같은 폴더에 녹화 중이면 먼저 해당 녹화를 중지합니다. 화면은 자신이 시작한 녹화만 중지합니다.</p><p class="small">브라우저 창만 닫아도 녹화는 계속됩니다. 수동으로 UI를 띄운 터미널을 종료하면 그 화면에서 시작한 녹화도 종료합니다. 부팅 자동 실행은 다음 페이지의 서비스 등록 절차를 사용합니다.</p></section>
+<section class="sheet" id="ui-weather" aria-labelledby="ui-weather-title"><div class="page-head"><span class="page-no">03</span><h2 id="ui-weather-title">예보가 맞는 날 전체 녹화</h2></div><p><strong>오늘 예보에 비가 한 번이라도 있으면 오늘의 시간표 전체를 녹화</strong>합니다. 녹화하는 순간에 실제로 비가 오는지로 판단하지 않습니다.</p><div class="table-wrap"><table><thead><tr><th scope="col">예보 예시</th><th scope="col">녹화 결과</th></tr></thead><tbody><tr><td>오후 15시에만 비 예보</td><td>06–11시 / 12–17시 / 18–22시 모두 실행</td></tr><tr><td>당일 비·비/눈·소나기 예보 없음</td><td>비 조건에서는 그날 녹화하지 않음</td></tr><tr><td>오후에 새로 비 예보 확인</td><td>남은 예약 구간부터 실행. 지난 영상은 복원 불가</td></tr></tbody></table></div><p><strong>시간표 · 날씨</strong>에서 조건을 켜고 날씨와 지역을 고릅니다. 여러 날씨 중 하나만 맞아도 충족하며, 한 번 충족한 날은 남은 일정을 유지합니다.</p><div class="codebox"><div class="code-label">JSON에 미리 추가할 지역·날씨 설정 예</div><pre><code>&quot;weather_condition&quot;: {
+  &quot;enabled&quot;: true,
+  &quot;region&quot;: {
+    &quot;sido&quot;: &quot;부산광역시&quot;,
+    &quot;sigungu&quot;: &quot;해운대구&quot;,
+    &quot;eupmyeondong&quot;: &quot;&quot;
+  },
+  &quot;conditions&quot;: [&quot;rain&quot;],
+  &quot;provider&quot;: &quot;open_meteo&quot;,
+  &quot;met_contact&quot;: &quot;&quot;,
+  &quot;poll_minutes&quot;: 30
+}</code></pre></div><p class="small">읍·면·동을 비우면 시·군·구 대표 지점을 사용합니다. 읍·면·동까지 선택할 수도 있으며, 제공처마다 예보 모델과 해상도가 다릅니다.</p><p class="small">파일명에는 실제 관측 날씨와 구분해 <strong>비예보일</strong>처럼 표시합니다. 예보 조회 실패 시 새 조건 녹화는 대기하며, 이미 조건을 충족한 당일은 남은 일정을 유지합니다.</p></section>
+<section class="sheet" id="ui-install" aria-labelledby="ui-install-title"><div class="page-head"><span class="page-no">04</span><h2 id="ui-install-title">처음 연결과 자동 실행</h2></div><h3>개인용은 Open-Meteo 선택</h3><p>시간표 · 날씨에서 <strong>Open-Meteo</strong>를 선택하면 API 키·연락처 없이 예보를 사용할 수 있습니다. 무료 API는 개인·비상업용입니다. <a href="https://open-meteo.com/en/pricing">사용 조건</a></p><p class="small">MET Norway도 키가 없으며 실제 연락 가능한 개인 이메일 또는 프로젝트 URL을 입력합니다. 기상청은 선택한 발급처의 인증키를 등록합니다. 날씨 조건은 기본 꺼짐입니다.</p><div class="codebox"><div class="code-label">설정 확인 후 UI와 예약 녹화를 부팅 시 자동 시작</div><pre><code>sudo python3 record.py --config recording.json --ui --install</code></pre></div><p>기존 관리 서비스를 UI 방식으로 등록합니다. 화면에서 중지해도 다음 부팅에는 예약 녹화를 다시 시작합니다. 부팅 자동 실행까지 끄려면 아래 명령을 사용합니다.</p><div class="codebox"><div class="code-label">서비스 중지와 부팅 자동 실행 해제</div><pre><code>sudo systemctl disable --now goomi-camera-recorder.service</code></pre></div><h3>다른 PC의 브라우저에서 접속</h3><div class="codebox"><div class="code-label">ED_IP를 실제 IP로 변경 · SSH 연결을 유지합니다</div><pre><code>ssh -N -L 8765:127.0.0.1:8765 dis@ED_IP</code></pre></div><p>연결한 PC에서 <code>http://127.0.0.1:8765/</code>를 엽니다. UI는 장비의 로컬 주소에만 열리며 외부에 공개되지 않습니다.</p><div class="codebox"><div class="code-label">서비스 등록을 완전히 제거 · 설정과 영상은 보존</div><pre><code>sudo python3 record.py --uninstall</code></pre></div><p class="small">지역 목록 출처: <a href="https://data.kma.go.kr/community/board/detailBoard.do?bbrdTypeNo=4&amp;bbrdNo=68822">기상청 동네예보 지점 좌표, 2026년 7월</a>. 인증키를 배포용 JSON이나 소스에 넣지 않습니다.</p></section>
+<section class="sheet" id="json-config" aria-labelledby="json-config-title"><div class="page-head"><span class="page-no">05</span><h2 id="json-config-title">JSON: 이름·날씨·저장 위치</h2></div><p>아래는 <strong>2026년 10월 15일에만</strong> 세 구간을 녹화하는 예제입니다. 실제 날짜·교차로명·날씨·저장 경로로 수정하세요.</p><div class="codebox"><div class="code-label">recording.json · 전체 예제</div><pre><code>{
+  &quot;setup_ini&quot;: &quot;auto&quot;,
+  &quot;output_dir&quot;: &quot;/home/dis/recordings&quot;,
+  &quot;intersection_name&quot;: &quot;요트경기장&quot;,
+  &quot;weather&quot;: &quot;맑음&quot;,
+  &quot;recording_dates&quot;: [&quot;2026-10-15&quot;],
+  &quot;cameras&quot;: &quot;auto&quot;,
+  &quot;time_ranges&quot;: [
+    &quot;06:00-11:00&quot;, &quot;12:00-17:00&quot;, &quot;18:00-22:00&quot;
+  ],
+  &quot;segment_minutes&quot;: 30,
+  &quot;retention_days&quot;: 0,
+  &quot;min_free_gb&quot;: 5,
+  &quot;ffmpeg&quot;: &quot;ffmpeg&quot;,
+  &quot;reconnect_seconds&quot;: 10,
+  &quot;stall_seconds&quot;: 30
+}</code></pre></div><p><code>intersection_name</code>은 파일명의 교차로명, <code>weather</code>는 직접 입력한 날씨입니다. 빈 문자열 <code>""</code>이면 각각 기존 INI 이름 사용·날씨 제외로 처리합니다.</p><p><code>output_dir</code>는 원하는 폴더 또는 <code>"auto"</code>입니다. 상대 경로는 JSON 폴더 기준이며 서비스 계정이 쓸 수 있어야 합니다. SSD 연결·권한은 저장 위치 절차를 참고하세요.</p><p class="small">setup.ini가 여러 개면 setup_ini에 실제 운영 파일의 절대 경로를 적습니다. cameras의 auto는 INUSE=True인 카메라를 선택합니다. JSON에는 주석이나 마지막 항목 뒤 쉼표를 넣지 않습니다.</p></section>
+<section class="sheet" id="json-dates" aria-labelledby="json-dates-title"><div class="page-head"><span class="page-no">06</span><h2 id="json-dates-title">JSON: 실행 날짜와 적용</h2></div><div class="table-wrap"><table><thead><tr><th scope="col">recording_dates 값</th><th scope="col">녹화하는 날짜</th></tr></thead><tbody><tr><td><code>["2026-10-15"]</code></td><td>10월 15일에만 시작</td></tr><tr><td><code>["2026-10-15", "2026-10-17"]</code></td><td>15일과 17일에 시작</td></tr><tr><td><code>[]</code> 또는 항목 생략</td><td>기존처럼 매일 반복</td></tr></tbody></table></div><p>날짜는 <strong>한국 시간의 녹화 시작일</strong>입니다. 15일에 <code>23:00-01:00</code>을 지정하면 16일 01시까지 녹화합니다. 일정이 끝난 뒤 프로그램은 대기하며 자동 종료하지 않습니다.</p><p>생성되는 기본 JSON은 날짜 <code>[]</code>, 이름·날씨 <code>""</code>입니다. 날씨는 입력한 고정 문구이며 자동 조회하거나 날짜마다 바뀌지 않습니다. 수정 후 재시작해야 반영됩니다.</p><div class="codebox"><div class="code-label">설치 없이 실행 · Ctrl+C로 종료</div><pre><code>python3 record.py --config recording.json</code></pre></div><div class="codebox"><div class="code-label">INI로 설치한 서비스도 JSON으로 한 번 전환</div><pre><code>python3 record.py --config recording.json --check &amp;&amp; \
+  sudo python3 record.py --config recording.json --install</code></pre></div><div class="codebox"><div class="code-label">이후 JSON 수정 → 검사 성공 후 서비스 재시작</div><pre><code>nano recording.json
+python3 record.py --config recording.json --check &amp;&amp; \
+  sudo systemctl restart goomi-camera-recorder.service</code></pre></div><div class="note"><strong>JSON 사용 시 --config recording.json을 명시합니다.</strong>생략하면 기존 INI 또는 내장 기본값으로 실행됩니다. 두 설정은 합쳐지지 않으므로 이전 저장 위치·카메라·보관 정책을 JSON에도 옮겨 적습니다.</div><p class="small">서비스와 수동 실행을 같은 폴더로 동시에 시작하지 않습니다. 카메라별 이름·날씨 지정 방법과 이전 JSON 형식은 README를 참고하세요.</p></section>
+<section class="sheet" id="config" aria-labelledby="config-title"><div class="page-head"><span class="page-no">07</span><h2 id="config-title">INI 방식: 기본 설정</h2></div><p>이 페이지부터는 <strong>기존 INI 방식을 유지하는 경우</strong>의 절차입니다. 날짜 제한과 직접 입력한 교차로명·날씨는 앞쪽 JSON 방식을 사용합니다.</p><div class="codebox"><div class="code-label">recording.ini</div><pre><code>[CAMERAS]
+setup_ini = auto
+cameras = auto
+
+[RECORDING]
+time_ranges = 06:00-11:00, 12:00-17:00, 18:00-22:00
+segment_minutes = 30
+output_dir = auto
+retention_days = 0
+min_free_gb = 5
+ffmpeg = ffmpeg
+reconnect_seconds = 10
+stall_seconds = 30</code></pre></div><div class="table-wrap"><table><thead><tr><th scope="col">구분</th><th scope="col">역할</th></tr></thead><tbody><tr><td><code>setup.ini</code></td><td>기존 ED의 카메라 주소·접속 계정 정보</td></tr><tr><td><code>recording.ini</code></td><td>이 녹화 도구의 일정·분할 길이·저장 위치·보관 정책</td></tr></tbody></table></div>
+<p>줄 앞의 <code>;</code>는 설명용 주석입니다. 주석은 별도 줄에 적고, 항목 이름과 섹션 이름은 예제 그대로 사용합니다. 숫자에는 따옴표를 붙이지 않습니다.</p>
+<p class="small"><code>--init-config</code>를 다시 실행해도 기존 파일을 덮어쓰지 않습니다. <code>--install</code> 때 파일이 없으면 기본 설정을 자동 생성합니다. 설정 파일의 이름이나 위치를 바꾸면 새 경로를 지정해 다시 설치해야 합니다.</p></section>
+<section class="sheet" id="schedule" aria-labelledby="schedule-title"><div class="page-head"><span class="page-no">08</span><h2 id="schedule-title">녹화 구간과 파일 길이</h2></div><p><code>[RECORDING]</code> 섹션의 두 항목을 바꾸면 됩니다. 기존 파일에서 해당 항목만 수정합니다.</p><div class="codebox"><div class="code-label">시간 구간과 파일 분할 설정</div><pre><code>time_ranges = 06:00-11:00, 12:00-17:00, 18:00-22:00
+segment_minutes = 60</code></pre></div><div class="table-wrap"><table><thead><tr><th scope="col">기본 녹화 구간</th><th scope="col">녹화 시간</th></tr></thead><tbody><tr><td>06:00~11:00</td><td>5시간</td></tr><tr><td>12:00~17:00</td><td>5시간</td></tr><tr><td>18:00~22:00</td><td>4시간</td></tr></tbody></table></div>
+<p>기본은 하루 총 14시간입니다. 11~12시, 17~18시, 22~다음 날 06시에는 녹화하지 않습니다. 시간 구간은 쉼표로 나누고 24시간제로 적습니다.</p>
+<h3>파일 길이 선택</h3><div class="table-wrap"><table><thead><tr><th scope="col">설정</th><th scope="col">파일 길이</th></tr></thead><tbody><tr><td><code>segment_minutes = 30</code></td><td>약 30분마다 새 MP4</td></tr><tr><td><code>segment_minutes = 60</code></td><td>약 1시간마다 새 MP4</td></tr></tbody></table></div>
+<p>녹화 종료 시각과 파일 분할은 별개입니다. 구간이 끝나면 녹화를 종료하므로 마지막 파일은 더 짧을 수 있습니다. 키프레임 간격에 따라 실제 분할 시점이 조금 달라질 수 있습니다.</p>
+<h3>일정을 바꾸는 예</h3><div class="codebox"><div class="code-label">기존 time_ranges 항목을 교체 · 밤 23시부터 다음 날 01시</div><pre><code>time_ranges = 08:00-10:00, 18:00-20:00, 23:00-01:00</code></pre></div>
+<p class="small">시작과 종료 시각이 같은 구간은 허용하지 않습니다. 겹치거나 맞닿는 구간은 이어집니다. 변경 후 설정 검사와 서비스 재시작이 필요합니다.</p></section>
+<section class="sheet" id="camera" aria-labelledby="camera-title"><div class="page-head"><span class="page-no">09</span><h2 id="camera-title">기존 카메라 설정 연결</h2></div><p><code>[CAMERAS]</code>에서 주소를 읽을 파일과 녹화 대상을 정합니다. RTSP 주소를 recording.ini에 다시 입력할 필요가 없습니다.</p><div class="codebox"><div class="code-label">자동 탐색과 사용 중인 카메라 선택</div><pre><code>[CAMERAS]
+setup_ini = auto
+cameras = auto</code></pre></div>
+<p><code>setup_ini = auto</code>이면 코드 주변의 <code>config/setup.ini</code>를 먼저 확인하고, 없으면 <code>/home/dis</code> 아래를 검색합니다. 한 개면 사용하고 여러 개면 후보 경로를 표시합니다.</p>
+<p><code>cameras = auto</code>이면 기존 setup.ini의 CAM 섹션 중 <code>INUSE=True</code>인 카메라의 <code>URL</code>을 읽습니다.</p>
+<h3>여러 설정이 있거나 특정 카메라만 녹화할 때</h3><div class="codebox"><div class="code-label">기존 [CAMERAS] 섹션의 값을 수정</div><pre><code>setup_ini = /home/dis/실제프로젝트/config/setup.ini
+cameras = CAM1, CAM2</code></pre></div><div class="note"><strong>명시한 카메라는 INUSE 값과 관계없이 선택합니다.</strong>주소는 선택한 CAM 섹션의 URL을 읽습니다. IP만 있는 CAMADDR나 테스트용 AVI 파일 경로로는 녹화할 수 없습니다.</div>
+<h3>경로와 프로젝트 이름</h3>
+<p>프로젝트 폴더가 2025goomi인지 2026goomi인지는 상관없습니다. 같은 이름의 설정이 여러 개면 실제 운영 파일의 경로를 지정합니다. 상대 경로는 <strong>recording.ini가 있는 폴더</strong> 기준입니다.</p>
+<p class="small">설정이나 코드 위치를 바꾸면 서비스에 저장된 경로도 다시 등록해야 합니다. RTSP 계정·암호는 기존 setup.ini에서 관리하며 일반 배포본에 포함하지 않습니다.</p></section>
+<section class="sheet" id="storage" aria-labelledby="storage-title"><div class="page-head"><span class="page-no">10</span><h2 id="storage-title">저장 위치와 보관</h2></div><p><code>[RECORDING]</code>의 저장 항목을 조정합니다. 기본은 찾은 프로젝트의 <code>runtime/scheduled_recordings</code>이며, 별도 SSD는 절대 경로로 지정합니다.</p><div class="codebox"><div class="code-label">별도 SSD에 저장 · 기존 [RECORDING] 항목 수정</div><pre><code>output_dir = /mnt/recordings
+retention_days = 0
+min_free_gb = 5</code></pre></div><div class="codebox"><div class="code-label">실제 마운트와 여유 공간 확인</div><pre><code>findmnt -T /mnt/recordings
+df -h /mnt/recordings</code></pre></div>
+<p class="small">SOURCE가 의도한 SSD인지 확인합니다. 마운트가 빠진 폴더에 저장하면 시스템 디스크를 사용할 수 있습니다. 서비스 계정에 해당 폴더의 쓰기 권한이 필요합니다.</p>
+<h3>자동 삭제와 공간 부족</h3><div class="table-wrap"><table><thead><tr><th scope="col">항목</th><th scope="col">동작</th></tr></thead><tbody><tr><td><code>retention_days = 0</code></td><td>자동 삭제하지 않음</td></tr><tr><td><code>retention_days = 30</code></td><td>보관 기간이 지난 관리 대상 파일 정리</td></tr><tr><td><code>min_free_gb = 5</code></td><td>남은 공간 5 GiB 미만이면 녹화 중지</td></tr></tbody></table></div><div class="caution"><strong>보관 일수를 양수로 바꾸면 실제 영상이 삭제됩니다.</strong>파일 수정 시각 기준으로 시작 시와 이후 매시간 정리합니다. 현재 쓰는 파일은 제외하며, 기존 MKV 파일도 같은 보관 정책을 따릅니다.</div>
+<p>공간이 회복되면 예약 구간 안에서 녹화를 재개합니다. 4 Mbps 카메라 네 대를 기본 14시간씩 녹화하면 약 100.8 GB/일이므로 실제 비트레이트에 맞춰 용량을 확보합니다.</p>
+<p class="small">용량 예시는 십진 GB, 여유 공간 설정은 GiB 기준입니다. 재접속 간격은 reconnect_seconds, 영상 정지 감지 시간은 stall_seconds이며 기본값은 10초와 30초입니다.</p></section>
+<section class="sheet" id="service" aria-labelledby="service-title"><div class="page-head"><span class="page-no">11</span><h2 id="service-title">INI 설치와 변경 적용</h2></div><h3>처음 설치 · INI 방식</h3>
+<p>Python 3.8 이상과 FFmpeg를 먼저 준비합니다. 인터넷 연결 Ubuntu에서는 다음 명령으로 설치할 수 있습니다.</p><div class="codebox"><div class="code-label">필수 프로그램 준비</div><pre><code>sudo apt-get update
+sudo apt-get install -y python3 ffmpeg</code></pre></div><div class="codebox"><div class="code-label">설정 생성 → 편집 → 검사 성공 후 설치</div><pre><code>python3 record.py --init-config
+nano recording.ini
+python3 record.py --check &amp;&amp; sudo python3 record.py --install</code></pre></div>
+<p>설치 시 현재 sudo 실행자의 계정으로 검사하고 서비스를 등록합니다. root로 직접 로그인했다면 <code>--user 실제계정명</code>을 추가합니다. sudo 설치가 새로 만든 INI는 선택한 서비스 계정 소유로 생성됩니다.</p>
+<h3>이후 설정을 바꿀 때</h3><div class="codebox"><div class="code-label">INI 수정 후 검사·재시작 · 재설치는 필요하지 않습니다</div><pre><code>nano recording.ini
+python3 record.py --check &amp;&amp; \
+  sudo systemctl restart goomi-camera-recorder.service</code></pre></div><div class="note"><strong>서비스는 INI 파일 경로를 저장합니다.</strong>녹화 구간·분할 시간·저장 위치를 수정하고 재시작하면 새 값을 읽습니다. 파일 저장만으로 실행 중인 서비스에 즉시 반영되지는 않습니다.</div>
+<p class="small">기존 명령 옵션 방식으로 설치했다면 새 코드와 INI를 준비한 뒤 <code>--install</code>을 한 번 다시 실행해 전환합니다. 기존 INI가 있을 때 설치 명령에 시간·저장 옵션을 함께 주면 오류가 나므로 INI를 편집합니다.</p></section>
+<section class="sheet" id="test" aria-labelledby="test-title"><div class="page-head"><span class="page-no">12</span><h2 id="test-title">한 번만 시험 녹화</h2></div><p>최신 record.py로 교체하면 JSON을 편집하지 않고 실행할 때 녹화 시간을 정할 수 있습니다. <strong>지정한 시간이 끝나면 파일을 마무리하고 프로그램도 자동 종료합니다.</strong></p><div class="codebox"><div class="code-label">검사만 실행 · 실제 카메라 연결이나 녹화는 하지 않습니다</div><pre><code>python3 record.py --config recording.json --check</code></pre></div><div class="codebox"><div class="code-label">같은 저장 폴더를 사용하는 서비스가 있다면 먼저 중지</div><pre><code>sudo systemctl stop goomi-camera-recorder.service</code></pre></div><div class="codebox"><div class="code-label">즉시 시작해서 5분만 녹화 · 설치 불필요</div><pre><code>python3 record.py --config recording.json --record-minutes 5</code></pre></div><div class="codebox"><div class="code-label">오늘 18:30 시작 → 10분 녹화 → 종료 · 한국 시간</div><pre><code>python3 record.py --config recording.json \
+  --start-at 18:30 --record-minutes 10</code></pre></div><div class="note"><strong>JSON의 날짜·시간표는 이번 실행에만 대체합니다.</strong>카메라·저장 위치·이름·날씨는 그대로 사용합니다. 설정 파일은 수정하지 않습니다. 실제 영상은 연결 지연이나 끊김만큼 짧을 수 있습니다.</div><p><code>--start-at</code>은 오늘의 아직 지나지 않은 시각만 허용합니다. 이미 지났으면 오류가 나며, 즉시 시작하려면 이 옵션을 생략합니다. 다음 날 자동 반복하지 않습니다.</p><div class="codebox"><div class="code-label">JSON 없이 실행 · 실제 setup.ini 경로로 수정</div><pre><code>python3 record.py \
+  --setup-ini /home/dis/실제프로젝트/config/setup.ini \
+  --record-minutes 5</code></pre></div><p class="small">JSON 없이 실행하면 옆의 INI 또는 내장 기본값을 사용합니다. 시험 영상을 재생해 확인하세요. 기존 서비스 재개는 설치·운영 절차를 참고하세요.</p></section>
+<section class="sheet" id="operate" aria-labelledby="operate-title"><div class="page-head"><span class="page-no">13</span><h2 id="operate-title">운영 상태와 영상 확인</h2></div><div class="codebox"><div class="code-label">서비스 상태와 최근 로그</div><pre><code>systemctl is-enabled goomi-camera-recorder.service
+systemctl is-active goomi-camera-recorder.service
+sudo journalctl -u goomi-camera-recorder.service -n 80 --no-pager</code></pre></div><div class="note"><strong>active 상태와 실제 녹화 중인 상태는 다릅니다.</strong>UI만 실행 중이거나 시간·날씨 조건을 기다릴 수도 있습니다. 화면의 녹화 상태와 파일 생성·재생을 함께 확인합니다.</div><div class="codebox"><div class="code-label">저장 구조 예시</div><pre><code>저장 폴더/
+└── cam1/
+    └── 2026-10-13/
+        └── run_시작시각_고유번호/
+            ├── client29_요트경기장_West_20261013_060000_KST_000000.mp4
+            └── client29_요트경기장_West_20261013_063001_KST_000001.mp4</code></pre></div>
+<p>날짜 폴더는 녹화 실행을 시작한 날입니다. 자정을 넘겨도 같은 실행이면 폴더를 유지합니다. 재접속할 때는 새 run 폴더를 만듭니다.</p>
+<p>기존 영상은 재인코딩 없이 저장하며 음성·AI 검출 박스·분석 정보는 포함하지 않습니다. MP4는 중단에 대비하는 fragmented 방식이며 재생기와 코덱의 지원이 필요합니다.</p>
+<p class="small">장비 중단 중의 영상은 복원되지 않습니다. 예약 구간 안에 복구되면 원래 종료 시각까지 녹화합니다. 한국 시간이 정확한지 확인하세요.</p><div class="codebox"><div class="code-label">현재 참조 중인 설정 파일 경로와 한국 시간 확인</div><pre><code>systemctl cat goomi-camera-recorder.service
+TZ=Asia/Seoul date</code></pre></div></section>
+<section class="sheet" id="filenames" aria-labelledby="filenames-title"><div class="page-head"><span class="page-no">14</span><h2 id="filenames-title">영상 파일명과 현장 정보</h2></div><p>파일명에는 클라이언트 번호, 교차로명, 방향, 날씨, 한국 시간과 순번을 넣습니다. JSON의 이름·날씨를 비우면 기존 INI 이름을 사용하고 날씨는 제외합니다.</p><div class="codebox"><div class="code-label">JSON에서 이름·날씨를 지정한 예</div><pre><code>client29_요트경기장_West_맑음_20261015_060000_KST_000000.mp4</code></pre></div><div class="table-wrap"><table><thead><tr><th scope="col">파일명 항목</th><th scope="col">읽는 위치 또는 의미</th></tr></thead><tbody><tr><td>client29</td><td>setup.ini의 해당 CAM 섹션에 있는 CLIENTNO</td></tr><tr><td>요트경기장</td><td>JSON의 intersection_name 또는 client29.ini의 NAME</td></tr><tr><td>West</td><td>client29.ini → [INTERSECTION] CAMDIR=4</td></tr><tr><td>맑음</td><td>JSON의 weather. 빈 문자열이면 이 부분 제외</td></tr><tr><td>20261015_060000_KST</td><td>ED에서 파일 생성을 확인한 한국 시간</td></tr><tr><td>000000</td><td>해당 녹화 실행 안에서의 분할 순번. 다음 파일은 000001.</td></tr></tbody></table></div><p>CAM1의 CLIENTNO가 29이면 <strong>client29.ini</strong>를 사용합니다. CAM 번호를 클라이언트 번호로 추측하지 않습니다.</p><p class="small">방향: 1 North(북), 2 East(동), 3 South(남), 4 West(서).<br>5 North-East(북동), 6 East-South(남동), 7 South-West(남서), 8 West-North(북서).</p><p class="small">시간은 약 0.2초 간격으로 새 파일을 확인할 때 기록합니다. 카메라 내부의 촬영 프레임 시각은 아닙니다. 처음에는 _pending_000000.mp4 같은 중간 이름이 잠깐 보일 수 있습니다.</p><div class="note"><strong>정보를 읽지 못해도 영상은 계속 저장합니다.</strong>누락된 값은 clientUnknown_cam1, UnknownIntersection, UnknownDirection 등으로 표시하고 경고를 남깁니다. 이름 변경에 실패하면 원래 pending 파일을 보존합니다.</div><p class="small">새 record.py로 교체 후 재시작하면 이후 생성되는 파일부터 적용됩니다. 기존 영상 파일을 일괄 변경하지 않습니다. 파일명에 쓸 수 없는 문자는 정리되며 충돌 시 추가 식별자가 붙을 수 있습니다.</p></section>
+<section class="sheet" id="trouble" aria-labelledby="trouble-title"><div class="page-head"><span class="page-no">15</span><h2 id="trouble-title">장애 조치</h2></div><p>설정 검사 결과와 최근 서비스 로그를 확인합니다. 아래는 핵심 오류 문구입니다.</p><div class="table-wrap"><table><thead><tr><th scope="col">증상 / 로그</th><th scope="col">확인과 조치</th></tr></thead><tbody><tr><td><code>Invalid recording.ini structure</code></td><td>[CAMERAS]·[RECORDING] 섹션과 key = value 형식을 확인합니다.</td></tr><tr><td><code>Unknown recording.ini option</code></td><td>항목 이름의 철자를 예제와 대조합니다. 임의 옵션은 허용하지 않습니다.</td></tr><tr><td><code>setup.ini not found</code><br><code>Multiple setup.ini files found</code></td><td>recording.ini의 setup_ini에 실제 운영 설정 파일의 절대 경로를 지정합니다.</td></tr><tr><td><code>No enabled cameras</code></td><td>기존 setup.ini의 INUSE 값을 확인하거나 INI의 cameras에 CAM1, CAM2 등을 명시합니다.</td></tr><tr><td><code>URL must be a valid rtsp:// camera URL</code></td><td>선택한 카메라의 URL을 확인합니다. AVI·HTTP·IP만 있는 값은 사용할 수 없습니다.</td></tr><tr><td><code>FFmpeg not found</code></td><td>FFmpeg 설치를 확인하거나 INI의 ffmpeg에 실행 파일 경로를 지정합니다.</td></tr><tr><td><code>not writable</code><br><code>Free storage below</code></td><td>저장장치 마운트·서비스 계정 쓰기 권한·여유 공간을 확인합니다.</td></tr><tr><td><code>FFmpeg exited</code><br><code>no video progress</code></td><td>카메라 전원·네트워크·계정·스트림 경로를 확인합니다. 예약 구간 안에서는 재시도합니다.</td></tr><tr><td><code>Another recorder is already using output_dir</code></td><td>서비스와 수동 녹화가 겹쳤는지 확인합니다. 한쪽을 정상 종료하며 잠금 파일을 지우지 않습니다.</td></tr></tbody></table></div>
+<p class="small">장애 전달 시 ED 식별정보, 발생 시각, 대상 카메라, 서비스 상태, 최근 로그, 디스크 공간을 함께 남깁니다. RTSP 암호는 제거합니다. 실행 중 FFmpeg 인수에는 URL이 포함될 수 있습니다.</p></section>
+<section class="sheet" id="handover" aria-labelledby="handover-title"><div class="page-head"><span class="page-no">16</span><h2 id="handover-title">인수인계와 중지</h2></div><h3>완료 확인</h3><ul class="checklist">
+<li><label><input type="checkbox">선택한 JSON·INI의 일정·카메라·저장 위치를 확인했다.</label></li>
+<li><label><input type="checkbox">설정 검사에 성공하고 시험 MP4를 재생했다.</label></li>
+<li><label><input type="checkbox">서비스가 해당 설정 경로를 참조하고 예약 시간에 녹화한다.</label></li>
+<li><label><input type="checkbox">보관 정책과 변경 후 재시작 절차를 인계했다.</label></li></ul>
+<div class="signoff"><div>현장 / ED 번호:</div><div>담당자 / 확인일:</div></div>
+<h3>일시 중지와 다시 시작</h3><div class="two-col"><div class="codebox"><div class="code-label">일시 중지</div><pre><code>sudo systemctl stop \
+  goomi-camera-recorder.service</code></pre></div><div class="codebox"><div class="code-label">다시 시작</div><pre><code>sudo systemctl start \
+  goomi-camera-recorder.service</code></pre></div></div><div class="codebox"><div class="code-label">현재 중지 + 부팅 자동 실행 해제</div><pre><code>sudo systemctl disable --now goomi-camera-recorder.service</code></pre></div><div class="codebox"><div class="code-label">자동 실행 복구 + 즉시 시작</div><pre><code>sudo systemctl enable --now goomi-camera-recorder.service</code></pre></div><div class="codebox"><div class="code-label">관리 중인 서비스 제거</div><pre><code>sudo python3 record.py --uninstall</code></pre></div>
+<p>제거해도 JSON·INI 설정과 영상은 남습니다. 설정과 코드 위치를 바꾸면 새 경로에서 다시 설치합니다.</p>
+<p class="small">현장에는 코드 한 파일만 보내도 됩니다. 예제 INI는 참고용이며 생성 기능으로 만들 수 있습니다. 실제 계정 정보나 현장 영상은 일반 배포본에 포함하지 않습니다.</p></section></main>
+<div class="status" id="status" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  const status = document.getElementById('status');
+  let timer;
+  function announce(message) { clearTimeout(timer); status.textContent = message; status.classList.add('show'); timer = setTimeout(() => status.classList.remove('show'), 2200); }
+  document.getElementById('print').addEventListener('click', () => window.print());
+  document.querySelectorAll('.codebox').forEach((box, index) => {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'copy'; button.textContent = '복사';
+    button.setAttribute('aria-label', (index + 1) + '번째 명령어 또는 설정 복사');
+    button.addEventListener('click', async () => {
+      const text = box.querySelector('code').textContent;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+        else { const area = document.createElement('textarea'); area.value = text; area.style.position = 'fixed'; area.style.opacity = '0'; document.body.append(area); area.select(); const ok = document.execCommand('copy'); area.remove(); if (!ok) throw new Error('copy'); }
+        button.textContent = '복사됨'; announce('복사했습니다. 현장 값으로 바꾼 뒤 실행하세요.'); setTimeout(() => button.textContent = '복사', 1800);
+      } catch (_) { announce('자동 복사를 사용할 수 없습니다. 내용을 선택해 복사하세요.'); }
+    }); box.append(button);
+  });
+  const links = [...document.querySelectorAll('nav a')];
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(entries => { entries.forEach(entry => { if (entry.isIntersecting) links.forEach(link => { const active = link.hash === '#' + entry.target.id; link.classList.toggle('active', active); if (active) link.setAttribute('aria-current', 'location'); else link.removeAttribute('aria-current'); }); }); }, {rootMargin: '-8% 0px -65% 0px'});
+    document.querySelectorAll('.sheet').forEach(section => observer.observe(section));
+  }
+})();
+</script>
+</body>
+</html>
