@@ -126,7 +126,7 @@ class DesktopLauncherTests(unittest.TestCase):
         ffmpeg.assert_not_called()
         popen.assert_not_called()
         data = json.loads(self.config.read_text(encoding="utf-8"))
-        self.assertEqual(data["time_ranges"], ["06:00-11:00", "12:00-17:00", "18:00-22:00"])
+        self.assertEqual(data["time_ranges"], ['06:30-07:30', '10:00-11:00', '12:00-13:00', '17:00-18:00', '21:00-22:00'])
         self.assertEqual(data["segment_minutes"], 30)
         self.assertFalse(data["weather_condition"]["enabled"])
 

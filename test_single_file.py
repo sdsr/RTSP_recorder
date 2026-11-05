@@ -110,8 +110,9 @@ class SingleFileTests(unittest.TestCase):
                     value, _, _ = self.check(module)
                     self.assertEqual([camera.name for camera in value.cameras], ["cam1", "cam3"])
                     self.assertEqual([(s.hour, s.minute, s.duration) for s in value.schedules],
-                                     [(6, 0, timedelta(hours=5)), (12, 0, timedelta(hours=5)),
-                                      (18, 0, timedelta(hours=4))])
+                                     [(6, 30, timedelta(hours=1)), (10, 0, timedelta(hours=1)),
+                                      (12, 0, timedelta(hours=1)), (17, 0, timedelta(hours=1)),
+                                      (21, 0, timedelta(hours=1))])
                     self.assertEqual(value.segment_seconds, 1800)
                     self.assertEqual(value.output_dir, (project / "runtime" / "scheduled_recordings").resolve())
                     self.assertFalse(value.output_dir.exists())
@@ -122,28 +123,31 @@ class SingleFileTests(unittest.TestCase):
         _, _, _, module = self.project()
         value, _, _ = self.check(module)
         for hour, minute, second, active in (
-            (0, 0, 0, False), (5, 59, 59, False), (6, 0, 0, True),
-            (10, 59, 59, True), (11, 0, 0, False), (11, 59, 59, False),
-            (12, 0, 0, True), (16, 59, 59, True), (17, 0, 0, False),
-            (17, 59, 59, False), (18, 0, 0, True), (21, 59, 59, True),
-            (22, 0, 0, False), (23, 59, 59, False),
+            (0, 0, 0, False), (6, 29, 59, False), (6, 30, 0, True),
+            (7, 29, 59, True), (7, 30, 0, False), (9, 59, 59, False),
+            (10, 0, 0, True), (10, 59, 59, True), (11, 0, 0, False),
+            (11, 59, 59, False), (12, 0, 0, True), (12, 59, 59, True),
+            (13, 0, 0, False), (16, 59, 59, False), (17, 0, 0, True),
+            (17, 59, 59, True), (18, 0, 0, False), (20, 59, 59, False),
+            (21, 0, 0, True), (21, 59, 59, True), (22, 0, 0, False),
+            (23, 59, 59, False),
         ):
             with self.subTest(hour=hour, minute=minute, second=second):
                 now = datetime(2026, 10, 13, hour, minute, second, tzinfo=module.KST)
                 self.assertEqual(module.active_window(now, value.schedules) is not None, active)
 
-    def test_service_default_ranges_preserve_unequal_five_five_four_hour_windows(self):
+    def test_service_default_ranges_preserve_five_one_hour_windows(self):
         _, setup, _, module = self.project()
         value, _, args = self.check(module)
         runtime = module.service_arguments(args, value, setup.resolve())
         index = runtime.index("--time-ranges")
-        self.assertEqual(runtime[index + 1:index + 4],
-                         ["06:00-11:00", "12:00-17:00", "18:00-22:00"])
+        self.assertEqual(runtime[index + 1:index + 6],
+                         ['06:30-07:30', '10:00-11:00', '12:00-13:00', '17:00-18:00', '21:00-22:00'])
         self.assertNotIn("--start-times", runtime)
         self.assertNotIn("--duration-hours", runtime)
         restored, _, _ = self.check(module, runtime)
         self.assertEqual([s.duration for s in restored.schedules],
-                         [timedelta(hours=5), timedelta(hours=5), timedelta(hours=4)])
+                         [timedelta(hours=1)] * 5)
         self.assertEqual(value, restored)
 
     def test_custom_ranges_support_different_durations_and_overnight_service_round_trip(self):
@@ -200,7 +204,9 @@ class SingleFileTests(unittest.TestCase):
         _, setup, _, module = self.project()
         value, _, args = self.check(module, ["--duration-hours", "3"])
         self.assertEqual([(s.hour, s.minute, s.duration) for s in value.schedules],
-                         [(6, 0, timedelta(hours=3)), (12, 0, timedelta(hours=3)), (18, 0, timedelta(hours=3))])
+                         [(6, 30, timedelta(hours=3)), (10, 0, timedelta(hours=3)),
+                          (12, 0, timedelta(hours=3)), (17, 0, timedelta(hours=3)),
+                          (21, 0, timedelta(hours=3))])
         restored, _, _ = self.check(module, module.service_arguments(args, value, setup.resolve()))
         self.assertEqual(value, restored)
 

@@ -185,7 +185,7 @@ table{font-size:.9rem}table code{font-size:.8rem}.caption,.refstrip{font-size:.8
   &quot;recording_dates&quot;: [&quot;2026-10-15&quot;],
   &quot;cameras&quot;: &quot;auto&quot;,
   &quot;time_ranges&quot;: [
-    &quot;06:00-11:00&quot;, &quot;12:00-17:00&quot;, &quot;18:00-22:00&quot;
+    &quot;06:30-07:30&quot;, &quot;10:00-11:00&quot;, &quot;12:00-13:00&quot;, &quot;17:00-18:00&quot;, &quot;21:00-22:00&quot;
   ],
   &quot;segment_minutes&quot;: 30,
   &quot;retention_days&quot;: 0,
@@ -203,7 +203,7 @@ setup_ini = auto
 cameras = auto
 
 [RECORDING]
-time_ranges = 06:00-11:00, 12:00-17:00, 18:00-22:00
+time_ranges = 06:30-07:30, 10:00-11:00, 12:00-13:00, 17:00-18:00, 21:00-22:00
 segment_minutes = 30
 output_dir = auto
 retention_days = 0
@@ -213,9 +213,9 @@ reconnect_seconds = 10
 stall_seconds = 30</code></pre></div><div class="table-wrap"><table><thead><tr><th scope="col">구분</th><th scope="col">역할</th></tr></thead><tbody><tr><td><code>setup.ini</code></td><td>기존 ED의 카메라 주소·접속 계정 정보</td></tr><tr><td><code>recording.ini</code></td><td>이 녹화 도구의 일정·분할 길이·저장 위치·보관 정책</td></tr></tbody></table></div>
 <p>줄 앞의 <code>;</code>는 설명용 주석입니다. 주석은 별도 줄에 적고, 항목 이름과 섹션 이름은 예제 그대로 사용합니다. 숫자에는 따옴표를 붙이지 않습니다.</p>
 <p class="small"><code>--init-config</code>를 다시 실행해도 기존 파일을 덮어쓰지 않습니다. <code>--install</code> 때 파일이 없으면 기본 설정을 자동 생성합니다. 설정 파일의 이름이나 위치를 바꾸면 새 경로를 지정해 다시 설치해야 합니다.</p></section>
-<section class="sheet" id="schedule" aria-labelledby="schedule-title"><div class="page-head"><span class="page-no">08</span><h2 id="schedule-title">녹화 구간과 파일 길이</h2></div><p><code>[RECORDING]</code> 섹션의 두 항목을 바꾸면 됩니다. 기존 파일에서 해당 항목만 수정합니다.</p><div class="codebox"><div class="code-label">시간 구간과 파일 분할 설정</div><pre><code>time_ranges = 06:00-11:00, 12:00-17:00, 18:00-22:00
-segment_minutes = 60</code></pre></div><div class="table-wrap"><table><thead><tr><th scope="col">기본 녹화 구간</th><th scope="col">녹화 시간</th></tr></thead><tbody><tr><td>06:00~11:00</td><td>5시간</td></tr><tr><td>12:00~17:00</td><td>5시간</td></tr><tr><td>18:00~22:00</td><td>4시간</td></tr></tbody></table></div>
-<p>기본은 하루 총 14시간입니다. 11~12시, 17~18시, 22~다음 날 06시에는 녹화하지 않습니다. 시간 구간은 쉼표로 나누고 24시간제로 적습니다.</p>
+<section class="sheet" id="schedule" aria-labelledby="schedule-title"><div class="page-head"><span class="page-no">08</span><h2 id="schedule-title">녹화 구간과 파일 길이</h2></div><p><code>[RECORDING]</code> 섹션의 두 항목을 바꾸면 됩니다. 기존 파일에서 해당 항목만 수정합니다.</p><div class="codebox"><div class="code-label">시간 구간과 파일 분할 설정</div><pre><code>time_ranges = 06:30-07:30, 10:00-11:00, 12:00-13:00, 17:00-18:00, 21:00-22:00
+segment_minutes = 60</code></pre></div><div class="table-wrap"><table><thead><tr><th scope="col">기본 녹화 구간</th><th scope="col">녹화 시간</th></tr></thead><tbody><tr><td>06:30~07:30</td><td>1시간</td></tr><tr><td>10:00~11:00</td><td>1시간</td></tr><tr><td>12:00~13:00</td><td>1시간</td></tr><tr><td>17:00~18:00</td><td>1시간</td></tr><tr><td>21:00~22:00</td><td>1시간</td></tr></tbody></table></div>
+<p>기본은 하루 총 5시간입니다. 표에 지정한 다섯 구간 밖에서는 녹화하지 않습니다. 시간 구간은 쉼표로 나누고 24시간제로 적습니다.</p>
 <h3>파일 길이 선택</h3><div class="table-wrap"><table><thead><tr><th scope="col">설정</th><th scope="col">파일 길이</th></tr></thead><tbody><tr><td><code>segment_minutes = 30</code></td><td>약 30분마다 새 MP4</td></tr><tr><td><code>segment_minutes = 60</code></td><td>약 1시간마다 새 MP4</td></tr></tbody></table></div>
 <p>녹화 종료 시각과 파일 분할은 별개입니다. 구간이 끝나면 녹화를 종료하므로 마지막 파일은 더 짧을 수 있습니다. 키프레임 간격에 따라 실제 분할 시점이 조금 달라질 수 있습니다.</p>
 <h3>일정을 바꾸는 예</h3><div class="codebox"><div class="code-label">기존 time_ranges 항목을 교체 · 밤 23시부터 다음 날 01시</div><pre><code>time_ranges = 08:00-10:00, 18:00-20:00, 23:00-01:00</code></pre></div>
@@ -236,7 +236,7 @@ min_free_gb = 5</code></pre></div><div class="codebox"><div class="code-label">�
 df -h /mnt/recordings</code></pre></div>
 <p class="small">SOURCE가 의도한 SSD인지 확인합니다. 마운트가 빠진 폴더에 저장하면 시스템 디스크를 사용할 수 있습니다. 서비스 계정에 해당 폴더의 쓰기 권한이 필요합니다.</p>
 <h3>자동 삭제와 공간 부족</h3><div class="table-wrap"><table><thead><tr><th scope="col">항목</th><th scope="col">동작</th></tr></thead><tbody><tr><td><code>retention_days = 0</code></td><td>자동 삭제하지 않음</td></tr><tr><td><code>retention_days = 30</code></td><td>보관 기간이 지난 관리 대상 파일 정리</td></tr><tr><td><code>min_free_gb = 5</code></td><td>남은 공간 5 GiB 미만이면 녹화 중지</td></tr></tbody></table></div><div class="caution"><strong>보관 일수를 양수로 바꾸면 실제 영상이 삭제됩니다.</strong>파일 수정 시각 기준으로 시작 시와 이후 매시간 정리합니다. 현재 쓰는 파일은 제외하며, 기존 MKV 파일도 같은 보관 정책을 따릅니다.</div>
-<p>공간이 회복되면 예약 구간 안에서 녹화를 재개합니다. 4 Mbps 카메라 네 대를 기본 14시간씩 녹화하면 약 100.8 GB/일이므로 실제 비트레이트에 맞춰 용량을 확보합니다.</p>
+<p>공간이 회복되면 예약 구간 안에서 녹화를 재개합니다. 4 Mbps 카메라 네 대를 기본 5시간씩 녹화하면 약 36 GB/일이므로 실제 비트레이트에 맞춰 용량을 확보합니다.</p>
 <p class="small">용량 예시는 십진 GB, 여유 공간 설정은 GiB 기준입니다. 재접속 간격은 reconnect_seconds, 영상 정지 감지 시간은 stall_seconds이며 기본값은 10초와 30초입니다.</p></section>
 <section class="sheet" id="service" aria-labelledby="service-title"><div class="page-head"><span class="page-no">11</span><h2 id="service-title">INI 설치와 변경 적용</h2></div><h3>처음 설치 · INI 방식</h3>
 <p>Python 3.8 이상과 FFmpeg를 먼저 준비합니다. 인터넷 연결 Ubuntu에서는 다음 명령으로 설치할 수 있습니다.</p><div class="codebox"><div class="code-label">필수 프로그램 준비</div><pre><code>sudo apt-get update

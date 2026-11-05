@@ -9,6 +9,12 @@ DESKTOP_PROVIDERS = (
     ("kma_api_hub", "기상청 · API허브"),
 )
 
+DESKTOP_CAMERA_MODES = (
+    ("setup", "기존 setup.ini 사용"),
+    ("direct", "카메라 IP 직접 입력"),
+    ("custom", "기존 개별 설정 유지"),
+)
+
 
 def desktop_number(value, label, integer=False):
     try:
@@ -336,20 +342,60 @@ class RecorderDesktopApp:
     def _build_device(self):
         parent = self.device_tab
         self.ttk.Label(parent, text="카메라와 저장 위치", style="Section.TLabel").grid(row=0, column=0, sticky="w")
-        fields = self.ttk.Frame(parent)
-        fields.grid(row=1, column=0, sticky="ew", pady=14)
-        fields.columnconfigure(1, weight=1)
-        self._label(fields, "카메라 setup.ini", 0)
-        self.setup_box = self.ttk.Combobox(fields, textvariable=self._var("setup_ini", "auto"), width=55)
+        connection = self.ttk.Frame(parent)
+        connection.grid(row=1, column=0, sticky="ew", pady=14)
+        connection.columnconfigure(1, weight=1)
+        self._label(connection, "카메라 지정 방법", 0)
+        self.camera_mode_box = self.ttk.Combobox(
+            connection, textvariable=self._var("camera_mode", DESKTOP_CAMERA_MODES[0][1]),
+            values=[label for _, label in DESKTOP_CAMERA_MODES], state="readonly", width=35)
+        self.camera_mode_box.grid(row=0, column=1, sticky="w", pady=5)
+        self.camera_mode_box.bind("<<ComboboxSelected>>", lambda _event: self._camera_mode_fields())
+        self.setup_frame = self.ttk.Frame(connection)
+        self.setup_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        self.setup_frame.columnconfigure(1, weight=1)
+        self._label(self.setup_frame, "카메라 setup.ini", 0)
+        self.setup_box = self.ttk.Combobox(self.setup_frame, textvariable=self._var("setup_ini", "auto"), width=55)
         self.setup_box.grid(row=0, column=1, sticky="ew", pady=5)
-        self.ttk.Button(fields, text="파일 선택", command=self.choose_setup).grid(row=0, column=2, padx=(8, 0))
-        self.ttk.Button(fields, text="자동 찾기", command=self.find_setup).grid(row=1, column=1, sticky="w", pady=5)
+        self.ttk.Button(self.setup_frame, text="파일 선택", command=self.choose_setup).grid(row=0, column=2, padx=(8, 0))
+        self.ttk.Button(self.setup_frame, text="자동 찾기", command=self.find_setup).grid(row=1, column=1, sticky="w", pady=5)
         self.setup_note = self.tk.StringVar(self.root, "여러 설정이 나오면 실제 운영 중인 파일을 직접 선택하세요.")
-        self.ttk.Label(fields, textvariable=self.setup_note, style="Muted.TLabel", wraplength=700).grid(row=2, column=1, sticky="w", pady=5)
+        self.ttk.Label(self.setup_frame, textvariable=self.setup_note, style="Muted.TLabel", wraplength=700).grid(row=2, column=1, sticky="w", pady=5)
+        self.direct_frame = self.ttk.Frame(connection)
+        self.direct_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        self.direct_frame.columnconfigure(1, weight=1)
+        self._label(self.direct_frame, "녹화할 카메라 IP", 0)
+        self._var("camera_ips")
+        self.camera_ips = self.tk.Text(self.direct_frame, height=4, width=48, wrap="word",
+                                      font=(self.font_family, 11), background="#ffffff", foreground="#1d304a")
+        self.camera_ips.grid(row=0, column=1, sticky="ew", pady=5)
+        self.camera_ips.bind("<<Modified>>", self._camera_ips_changed)
+        self.ttk.Label(self.direct_frame, text="예: 169.254.130.12, 169.254.130.13\n한 줄에 하나씩 또는 쉼표로 구분하세요. 입력한 카메라를 모두 녹화합니다.",
+                       style="Muted.TLabel", wraplength=700).grid(row=1, column=1, sticky="w", pady=5)
+        self._label(self.direct_frame, "공통 아이디", 2)
+        self._entry(self.direct_frame, "camera_username", 2, "admin")
+        self._label(self.direct_frame, "공통 비밀번호", 3)
+        self._entry(self.direct_frame, "camera_password", 3, show="•")
+        self.camera_password_note = self.tk.StringVar(self.root, "카메라에 설정된 비밀번호를 입력하세요.")
+        self.ttk.Label(self.direct_frame, textvariable=self.camera_password_note, style="Muted.TLabel", wraplength=700).grid(row=4, column=1, sticky="w", pady=5)
+        self._label(self.direct_frame, "RTSP 포트", 5)
+        self._entry(self.direct_frame, "camera_port", 5, "554", width=12).grid_configure(sticky="w")
+        self._label(self.direct_frame, "영상 경로", 6)
+        self._entry(self.direct_frame, "camera_path", 6, "/profile2/media.smp")
+        self.ttk.Label(self.direct_frame, text="직접 입력할 때는 아래에서 영상 저장 폴더도 지정하세요.",
+                       style="Muted.TLabel", wraplength=700).grid(row=7, column=1, sticky="w", pady=5)
+        self.custom_note = self.ttk.Label(connection, text="카메라마다 다른 연결 설정을 그대로 사용합니다. 새 IP 목록을 지정하려면 ‘카메라 IP 직접 입력’을 선택하세요.",
+                                          style="Muted.TLabel", wraplength=780)
+        self.custom_note.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        self.ttk.Separator(parent).grid(row=2, column=0, sticky="ew", pady=12)
+        fields = self.ttk.Frame(parent)
+        fields.grid(row=3, column=0, sticky="ew", pady=14)
+        fields.columnconfigure(1, weight=1)
         self._label(fields, "영상 저장 폴더", 3)
         self._entry(fields, "output_dir", 3, "auto")
         self.ttk.Button(fields, text="폴더 선택", command=self.choose_output).grid(row=3, column=2, padx=(8, 0))
-        self.ttk.Label(fields, text="auto이면 프로젝트의 runtime/scheduled_recordings 폴더에 저장합니다.", style="Muted.TLabel").grid(row=4, column=1, sticky="w", pady=5)
+        self.output_note = self.tk.StringVar(self.root)
+        self.ttk.Label(fields, textvariable=self.output_note, style="Muted.TLabel", wraplength=700).grid(row=4, column=1, sticky="w", pady=5)
         self._label(fields, "교차로명", 5)
         self._entry(fields, "intersection_name", 5)
         self.ttk.Label(fields, text="비우면 카메라 설정의 이름을 사용합니다.", style="Muted.TLabel").grid(row=6, column=1, sticky="w")
@@ -363,14 +409,35 @@ class RecorderDesktopApp:
         self.ttk.Label(fields, text="0이면 자동 삭제하지 않습니다. 1 이상이면 보관 기간이 지난 녹화 파일을 삭제합니다.", style="Muted.TLabel", wraplength=740).grid(row=11, column=1, sticky="w")
         self._label(fields, "최소 여유 공간 (GiB)", 12)
         self._entry(fields, "min_free_gb", 12, "5", width=12).grid_configure(sticky="w")
-        self.ttk.Separator(parent).grid(row=2, column=0, sticky="ew", pady=16)
-        self.ttk.Label(parent, text="다음에도 간단히 실행", style="Section.TLabel").grid(row=3, column=0, sticky="w")
+        self.ttk.Separator(parent).grid(row=4, column=0, sticky="ew", pady=16)
+        self.ttk.Label(parent, text="다음에도 간단히 실행", style="Section.TLabel").grid(row=5, column=0, sticky="w")
         self.ttk.Label(parent, text="앱 메뉴에 ‘ED 카메라 녹화’ 아이콘을 만듭니다. 이 작업은 녹화를 시작하거나 부팅 서비스를 등록하지 않습니다.",
-                       style="Muted.TLabel", wraplength=950).grid(row=4, column=0, sticky="w", pady=8)
+                       style="Muted.TLabel", wraplength=950).grid(row=6, column=0, sticky="w", pady=8)
         self.ttk.Button(parent, text="실행 아이콘 만들기", command=lambda: self.action(
-            lambda: install_desktop_shortcut(self.controller.config_path))).grid(row=5, column=0, sticky="w")
+            lambda: install_desktop_shortcut(self.controller.config_path))).grid(row=7, column=0, sticky="w")
         self.ttk.Label(parent, text="현재 설정 파일\n" + str(self.controller.config_path), wraplength=950,
-                       style="Muted.TLabel").grid(row=6, column=0, sticky="w", pady=(20, 0))
+                       style="Muted.TLabel").grid(row=8, column=0, sticky="w", pady=(20, 0))
+        self._camera_mode_fields()
+
+    def _camera_mode_id(self):
+        value = self.form["camera_mode"].get()
+        return next((key for key, label in DESKTOP_CAMERA_MODES if value == label), "setup")
+
+    def _camera_mode_fields(self):
+        mode = self._camera_mode_id()
+        self.setup_frame.grid() if mode == "setup" else self.setup_frame.grid_remove()
+        self.direct_frame.grid() if mode == "direct" else self.direct_frame.grid_remove()
+        self.custom_note.grid() if mode == "custom" else self.custom_note.grid_remove()
+        self.output_note.set("폴더 선택으로 저장할 위치를 지정하세요. 직접 입력 모드에서는 auto를 사용할 수 없습니다."
+                             if mode == "direct" else "auto이면 프로젝트의 runtime/scheduled_recordings 폴더에 저장합니다.")
+
+    def _camera_ips_changed(self, _event=None):
+        if not self.camera_ips.edit_modified():
+            return
+        value = self.camera_ips.get("1.0", "end-1c")
+        self.camera_ips.edit_modified(False)
+        if value != self.form["camera_ips"].get():
+            self.form["camera_ips"].set(value)
 
     def _changed(self, *_args):
         if not self.loading and self.loaded:
@@ -380,9 +447,9 @@ class RecorderDesktopApp:
     def _once_mode(self):
         self.once_time.configure(state="normal" if self.form["once_later"].get() else "disabled")
 
-    def add_range(self, value="06:00-11:00"):
+    def add_range(self, value=DEFAULT_TIME_RANGES[0]):
         if not isinstance(value, str):
-            value = "06:00-11:00"
+            value = DEFAULT_TIME_RANGES[0]
         start, _, end = value.partition("-")
         row = self.ttk.Frame(self.range_frame)
         row.pack(fill="x", pady=4)
@@ -458,6 +525,16 @@ class RecorderDesktopApp:
     def collect(self):
         values = {name: self.form[name].get().strip() for name in
                   ("setup_ini", "output_dir", "intersection_name", "weather")}
+        mode = self._camera_mode_id()
+        values["camera_connection"] = {"mode": mode}
+        if mode == "direct":
+            values["camera_connection"].update({
+                "ips": self.camera_ips.get("1.0", "end-1c").strip(),
+                "username": self.form["camera_username"].get().strip(),
+                "password": self.form["camera_password"].get(),
+                "port": desktop_number(self.form["camera_port"].get(), "RTSP 포트", True),
+                "path": self.form["camera_path"].get().strip(),
+            })
         values["time_ranges"] = [start.get().strip() + "-" + end.get().strip() for _, start, end in self.rows]
         values["recording_dates"] = desktop_dates(self.form["recording_dates"].get())
         for name, label, integer in (("segment_minutes", "파일 분할 길이", False), ("retention_days", "보관 일수", True),
@@ -479,6 +556,21 @@ class RecorderDesktopApp:
             for key, default in (("setup_ini", "auto"), ("output_dir", "auto"), ("intersection_name", ""), ("weather", ""),
                                  ("segment_minutes", 30), ("retention_days", 0), ("min_free_gb", 5)):
                 self.form[key].set(str(config.get(key, default)))
+            connection = config.get("camera_connection") or {"mode": "setup"}
+            mode = connection.get("mode", "setup")
+            self.camera_mode_box.configure(values=[label for key, label in DESKTOP_CAMERA_MODES
+                                                   if key != "custom" or mode == "custom"])
+            self.form["camera_mode"].set(next((label for key, label in DESKTOP_CAMERA_MODES if key == mode),
+                                              DESKTOP_CAMERA_MODES[0][1]))
+            for key, default in (("ips", ""), ("username", "admin"), ("port", 554), ("path", "/profile2/media.smp")):
+                self.form["camera_" + key].set(str(connection.get(key, default)))
+            self.form["camera_password"].set("")
+            self.camera_ips.delete("1.0", "end")
+            self.camera_ips.insert("1.0", self.form["camera_ips"].get())
+            self.camera_ips.edit_modified(False)
+            self.camera_password_note.set("비밀번호가 저장되어 있습니다. 빈칸이면 저장된 비밀번호를 유지합니다."
+                                          if connection.get("password_saved") else "카메라에 설정된 비밀번호를 입력하세요.")
+            self._camera_mode_fields()
             self.form["recording_dates"].set(", ".join(config.get("recording_dates", [])))
             for row, _, _ in self.rows:
                 row.destroy()
@@ -510,7 +602,7 @@ class RecorderDesktopApp:
                 # form instead of trapping the user behind a failed first load.
                 self.baseline = {key: value for key, value in config.items() if key in (
                     "setup_ini", "output_dir", "intersection_name", "weather", "recording_dates", "time_ranges",
-                    "segment_minutes", "retention_days", "min_free_gb", "weather_condition")}
+                    "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection")}
             self.loaded, self.dirty = True, False
             self.dirty_text.set("변경 사항을 저장했습니다.")
         finally:
@@ -613,6 +705,7 @@ class RecorderDesktopApp:
                 self.results.put((kind, callback, None, exc))
 
     def _set_busy(self, busy):
+        self.camera_ips.configure(state="disabled" if busy else "normal")
         if busy:
             self.disabled_widgets = []
             def visit(parent):

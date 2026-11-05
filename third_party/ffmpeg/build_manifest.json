@@ -1,0 +1,36 @@
+{
+  "source_repository": "https://github.com/FFmpeg/FFmpeg.git",
+  "source_commit": "2ec7bc915e56c4f3cb71bb4f96c7d900965b6c82",
+  "source_modified": false,
+  "binary": "../../bin/ffmpeg",
+  "binary_sha256": "61d4d9a88bc54f77df9939e03a74b1934afbf7fa0e840b764f19e58afb1d8fb5",
+  "configure_options": [
+    "--prefix=/home/dis/Documents/Codex/2026-10-20/wlr/work/RTSP_recorder/.local/ffmpeg-sha256",
+    "--disable-debug",
+    "--disable-doc",
+    "--disable-autodetect",
+    "--disable-ffplay",
+    "--disable-ffprobe",
+    "--disable-x86asm",
+    "--disable-everything",
+    "--enable-ffmpeg",
+    "--enable-network",
+    "--enable-protocol=file,pipe,tcp,udp,rtp",
+    "--enable-demuxer=rtsp,rtp,sdp,mov",
+    "--enable-muxer=mp4,mov,segment,null",
+    "--enable-parser=h264,hevc,aac,mpeg4video",
+    "--enable-bsf=extract_extradata,aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,filter_units,null",
+    "--enable-filter=null,anull"
+  ],
+  "build_command": [
+    "nice",
+    "-n",
+    "10",
+    "make",
+    "-j3",
+    "ffmpeg"
+  ],
+  "runtime_option_checks_passed": true,
+  "camera_connection_attempted_by_builder": false,
+  "system_ffmpeg_or_network_modified": false
+}

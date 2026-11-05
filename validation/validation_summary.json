@@ -1,0 +1,22 @@
+{
+  "version": "2026-11-05-v2.1",
+  "validation_date_kst": "2026-11-05",
+  "environment": "Ubuntu 26.04 x86_64, Python 3.14, Tk 8.6; native Linux temporary filesystem",
+  "unit_tests": {
+    "run": 323,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "actual_tk_tests_enabled": true,
+  "first_launch_without_config_verified": true,
+  "existing_config_bytes_preserved": true,
+  "bundled_ffmpeg_config_check_passed": true,
+  "camera_connection_attempted": false,
+  "real_camera_recording_retested": false,
+  "system_service_changed": false,
+  "network_configuration_changed": false,
+  "elapsed_seconds": 18.73,
+  "recorder_sha256": "e04c1ba67ff4d9a219b2a3a3d142f4855e29ff394596d268fa2bb60878f70637",
+  "test_logs_include": "Temporary mock-camera and localhost HTTP tests only; no real camera footage."
+}

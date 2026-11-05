@@ -269,10 +269,16 @@ class DesktopTkIntegrationTests(unittest.TestCase):
 
     def cleanup_window(self):
         if not self.app.destroyed:
-            self.controller.close()
-            self.app.jobs.put(None)
-            self.app.destroyed = True
-            self.tk_root.destroy()
+            try:
+                self.controller.close()
+            finally:
+                self.app.jobs.put(None)
+                self.app.destroyed = True
+                # A failed assertion bypasses the app's normal close callback.
+                # Remove its Tcl timers before the next test creates a root.
+                for identifier in self.tk_root.tk.call("after", "info"):
+                    self.tk_root.after_cancel(identifier)
+                self.tk_root.destroy()
         self.app.worker.join(timeout=2)
 
     def close_window(self):
@@ -287,9 +293,10 @@ class DesktopTkIntegrationTests(unittest.TestCase):
         app = self.app
         self.assertEqual(len(app.notebook.tabs()), 3)
         self.assertEqual(app.form["intersection_name"].get(), "초기 교차로")
-        self.assertEqual(len(app.rows), 3)
+        shown_ranges = [start.get() + "-" + end.get() for _, start, end in app.rows]
+        self.assertEqual(shown_ranges, self.data["time_ranges"])
         app.form["intersection_name"].set("구미 시험 교차로")
-        app.rows[0][1].set("06:30")
+        app.rows[0][1].set("06:45")
         app.form["recording_dates"].set("2026-10-28, 2026-10-30")
         app.form["sido"].set("경상북도")
         app._region_changed(0)
@@ -301,7 +308,9 @@ class DesktopTkIntegrationTests(unittest.TestCase):
         self.pump_until(lambda: not app.pending_action and not app.dirty)
         saved = json.loads(self.path.read_text(encoding="utf-8"))
         self.assertEqual(saved["intersection_name"], "구미 시험 교차로")
-        self.assertEqual(saved["time_ranges"][0], "06:30-11:00")
+        expected_ranges = list(self.data["time_ranges"])
+        expected_ranges[0] = "06:45-" + self.data["time_ranges"][0].split("-", 1)[1]
+        self.assertEqual(saved["time_ranges"], expected_ranges)
         self.assertEqual(saved["recording_dates"], ["2026-10-28", "2026-10-30"])
         self.assertEqual(saved["weather_condition"]["region"], {"sido": "경상북도", "sigungu": "구미시", "eupmyeondong": ""})
         for name in ("cameras", "reconnect_seconds", "stall_seconds"):
@@ -316,6 +325,15 @@ class DesktopTkIntegrationTests(unittest.TestCase):
         self.assertIn("오늘은 날씨 조건에 맞습니다", app.weather_text.get())
         self.assertIn("Recorder started", app.log_box.get("1.0", "end"))
         self.close_window()
+
+    def test_fallback_cleanup_cancels_callbacks_when_normal_close_was_bypassed(self):
+        callback = mock.Mock()
+        self.tk_root.after(100, callback)
+        self.cleanup_window()
+        self.assertTrue(self.app.destroyed)
+        self.assertFalse(self.app.worker.is_alive())
+        self.assertFalse(self.timers_at_destroy[-1])
+        callback.assert_not_called()
 
     def test_close_failure_leaves_live_controls_and_can_retry(self):
         actual_close = self.controller.close

@@ -31,7 +31,7 @@ class IniSettingsTests(unittest.TestCase):
         with patch.object(recorder, "find_setup_ini", side_effect=AssertionError("must not search")), \
                 patch.object(recorder, "standalone_settings", side_effect=AssertionError("must not read setup")):
             text = recorder.render_ini_config()
-        self.assertIn("time_ranges = 06:00-11:00, 12:00-17:00, 18:00-22:00", text)
+        self.assertIn("time_ranges = 06:30-07:30, 10:00-11:00, 12:00-13:00, 17:00-18:00, 21:00-22:00", text)
         self.assertIn("setup_ini = auto", text)
         self.assertIn("segment_minutes = 30", text)
         self.assertNotIn("rtsp://", text)
@@ -107,7 +107,7 @@ class IniSettingsTests(unittest.TestCase):
             self.assertEqual(options.output_dir, (cwd / "output").resolve())
             self.assertEqual(options.ffmpeg, str((cwd / "bin/ffmpeg").resolve()))
             self.assertIsNone(options.time_ranges)
-            self.assertEqual(options.start_times, ["06:00", "12:00", "18:00"])
+            self.assertEqual(options.start_times, ['06:30', '10:00', '12:00', '17:00', '21:00'])
             self.assertEqual(options.duration_hours, 3)
             self.assertEqual(options.segment_minutes, 60)
             changed = recorder.merge_ini_overrides(options, argparse.Namespace(time_ranges=["21:00-02:00"]))

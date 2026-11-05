@@ -109,7 +109,7 @@ class IniFlowTests(unittest.TestCase):
         self.assertEqual(parser.get("CAMERAS", "setup_ini"), "auto")
         self.assertEqual(parser.get("CAMERAS", "cameras"), "auto")
         self.assertEqual(parser.get("RECORDING", "time_ranges").replace(" ", ""),
-                         "06:00-11:00,12:00-17:00,18:00-22:00")
+                         "06:30-07:30,10:00-11:00,12:00-13:00,17:00-18:00,21:00-22:00")
         self.assertEqual(parser.getfloat("RECORDING", "segment_minutes"), 30)
         self.assertEqual(parser.get("RECORDING", "output_dir"), "auto")
         self.assertFalse((self.project / "runtime").exists())
@@ -142,7 +142,7 @@ class IniFlowTests(unittest.TestCase):
         self.assertFalse(self.config.exists())
         self.assertFalse(value.output_dir.exists())
         self.assertEqual([s.duration for s in value.schedules],
-                         [timedelta(hours=5), timedelta(hours=5), timedelta(hours=4)])
+                         [timedelta(hours=1)] * 5)
 
     def test_adjacent_ini_changes_are_loaded_on_next_run(self):
         self.initialize()

@@ -21,3 +21,6 @@ __pycache__/
 runtime/
 captures/
 recordings/
+
+# Optional local FFmpeg source, build logs and executable
+/.local/

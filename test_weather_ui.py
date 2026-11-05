@@ -188,7 +188,7 @@ class DailyGateTests(Fixture):
         gate.refresh(now(6))
         self.assertTrue(gate.allows_date(now().date(), now(6)))
         settings = record.load_settings(self.config)
-        for hour in (6, 13, 20):
+        for hour in (7, 12, 21):
             self.assertIsNotNone(record.settings_window(now(hour), settings,
                 lambda day: gate.allows_date(day, now(hour))))
         self.assertEqual(gate.label_for_day(now().date()), "비예보일")

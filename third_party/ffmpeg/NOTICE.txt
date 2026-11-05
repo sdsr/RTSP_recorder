@@ -1,0 +1,11 @@
+FFmpeg is a separate executable invoked by this recorder.
+Official source: https://github.com/FFmpeg/FFmpeg.git
+Source commit: 2ec7bc915e56c4f3cb71bb4f96c7d900965b6c82
+The unmodified corresponding source is included in source.tar.gz.
+This build does not enable GPL, version3 or nonfree options.
+See LICENSE.md and COPYING.LGPLv2.1 for licensing terms and notices.
+Rebuild helper: ../../tools/build_ffmpeg_rtsp.sh
+The exact original build options and executable SHA-256 are in build_manifest.json.
+A different installation prefix, toolchain or platform can change the binary hash.
+This software is based in part on the work of the Independent JPEG Group.
+No changes were made to the upstream sources.

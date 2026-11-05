@@ -1,0 +1,23 @@
+{
+  "output_dir": "./recordings",
+  "cameras": [
+    {
+      "name": "camera_12",
+      "url": "rtsp://admin@169.254.130.12:554/profile2/media.smp"
+    }
+  ],
+  "time_ranges": [
+    "06:30-07:30",
+    "10:00-11:00",
+    "12:00-13:00",
+    "17:00-18:00",
+    "21:00-22:00"
+  ],
+  "segment_minutes": 5,
+  "retention_days": 0,
+  "min_free_gb": 5,
+  "ffmpeg": "./bin/ffmpeg",
+  "reconnect_seconds": 10,
+  "stall_seconds": 30,
+  "recording_dates": []
+}
