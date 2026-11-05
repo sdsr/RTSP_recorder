@@ -58,7 +58,7 @@ class JsonSettingsTests(unittest.TestCase):
     def test_global_labels_override_ini_and_relative_output_is_based_on_json(self):
         settings = self.load()
         camera = settings.cameras[0]
-        self.assertEqual(record.camera_filename_prefix(camera), "client29_요트경기장_West_맑음")
+        self.assertEqual(record.camera_filename_prefix(camera), "cam1_ip192.0.2.1__client29_요트경기장_West_맑음")
         self.assertEqual(camera.client_no, "29")
         self.assertEqual(settings.output_dir, self.root / "captures")
         self.assertFalse(settings.output_dir.exists())
@@ -70,7 +70,7 @@ class JsonSettingsTests(unittest.TestCase):
     def test_empty_labels_keep_ini_name_and_original_filename_without_weather(self):
         self.data.update(intersection_name="  ", weather="", recording_dates=[])
         settings = self.load()
-        self.assertEqual(record.camera_filename_prefix(settings.cameras[0]), "client29_기존교차로_West")
+        self.assertEqual(record.camera_filename_prefix(settings.cameras[0]), "cam1_ip192.0.2.1__client29_기존교차로_West")
         self.assertEqual(settings.recording_dates, ())
 
     def test_camera_labels_take_precedence_and_explicit_list_can_select_disabled_camera(self):
@@ -80,9 +80,9 @@ class JsonSettingsTests(unittest.TestCase):
         ]
         settings = self.load()
         self.assertEqual([record.camera_filename_prefix(camera) for camera in settings.cameras],
-                         ["client29_요트경기장_West_맑음", "client30_다른교차로_West_비"])
+                         ["cam1_ip192.0.2.1__client29_요트경기장_West_맑음", "cam2_ip192.0.2.2__client30_다른교차로_West_비"])
         self.data["cameras"][1].update(intersection_name="", weather="")
-        self.assertEqual(record.camera_filename_prefix(self.load().cameras[1]), "client30_기존교차로_West")
+        self.assertEqual(record.camera_filename_prefix(self.load().cameras[1]), "cam2_ip192.0.2.2__client30_기존교차로_West")
 
     def test_json_auto_setup_output_and_camera_selection_work_together(self):
         self.data.update(setup_ini="auto", output_dir="auto")
@@ -107,7 +107,7 @@ class JsonSettingsTests(unittest.TestCase):
     def test_direct_urls_use_manual_labels_but_require_an_explicit_output_path(self):
         self.data["cameras"] = [{"name": "custom", "url": "rtsp://192.0.2.3/live"}]
         camera = self.load().cameras[0]
-        self.assertEqual(record.camera_filename_prefix(camera), "clientUnknown_custom_요트경기장_UnknownDirection_맑음")
+        self.assertEqual(record.camera_filename_prefix(camera), "custom_ip192.0.2.3__요트경기장_맑음")
         self.data["output_dir"] = "auto"
         with self.assertRaisesRegex(ValueError, "output_dir=auto"):
             self.load()
@@ -179,7 +179,7 @@ class JsonSettingsTests(unittest.TestCase):
         popen.assert_not_called()
         storage.assert_not_called()
         output = "\n".join(messages.output)
-        for value in (str(self.config), "recording_dates=2026-10-15", "client29_요트경기장_West_맑음"):
+        for value in (str(self.config), "recording_dates=2026-10-15", "cam1_ip192.0.2.1__client29_요트경기장_West_맑음"):
             self.assertIn(value, output)
         self.assertNotIn("PRIVATE", output)
 
@@ -211,7 +211,7 @@ class JsonSettingsTests(unittest.TestCase):
         namer = record.SegmentNamer(run, prefix)
         self.addCleanup(namer.close)
         first = namer.rename_available(kst(1, 6))[0]
-        self.assertEqual(first.name, "client29_요트경기장_West_맑음_20261001_060000_KST_000000.mp4")
+        self.assertEqual(first.name, "cam1_ip192.0.2.1__client29_요트경기장_West_맑음_20261001_060000_KST_000000.mp4")
         self.assertEqual(first.read_bytes(), b"video-data")
         current = run / (prefix + "_pending_000001.mp4")
         current.write_bytes(b"still-writing")

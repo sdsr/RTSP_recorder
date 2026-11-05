@@ -577,7 +577,8 @@ class RecorderUiController:
         writers, cameras, protect_all = activity
         active = protect_all or camera in cameras or (info.st_dev, info.st_ino) in writers
         return {"id": recording_identifier(relative), "name": parts[-1], "relative_path": relative,
-                "camera": camera, "date": day, "size": info.st_size, "modified_at": modified.isoformat(),
+                "camera": camera, "camera_host": recording_filename_host(parts[-1]),
+                "date": day, "size": info.st_size, "modified_at": modified.isoformat(),
                 "active": active, "incomplete": info.st_size == 0 or "_pending_" in parts[-1]}
 
     def recording_trash_items(self, root_fd):
@@ -635,6 +636,11 @@ class RecorderUiController:
                         item["id"] = recording_scoped_id(relative, root_info, info)
         except FileNotFoundError:
             items = []
+        # A current URL is not evidence of the source of a historical recording.
+        # Keep it separate from the host saved in new recording filenames.
+        current_hosts = {entry.name: urlsplit(entry.url).hostname for entry in self.settings().cameras}
+        for item in items:
+            item["current_camera_host"] = current_hosts.get(item["camera"], "")
         cameras, dates = sorted({item["camera"] for item in items}), sorted({item["date"] for item in items}, reverse=True)
         selected = [item for item in items if (not camera or item["camera"] == camera) and (not day or item["date"] == day)]
         selected.sort(key=lambda item: (item.get("trashed_at", item["modified_at"]), item["relative_path"]), reverse=True)

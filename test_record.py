@@ -315,7 +315,7 @@ class RecorderTests(unittest.TestCase):
         command = self.factory.call_args.args[0]
         self.assertEqual(command[command.index("-t") + 1], "3600.000")
         self.assertEqual(Path(command[-1]), Path("run-1") /
-                         "clientUnknown_cam1_UnknownIntersection_UnknownDirection_pending_%06d.mp4")
+                         "cam1_ip192.0.2.1_pending_%06d.mp4")
         self.assertIn("cam1", self.recorder.jobs)
 
     def test_overlapping_windows_do_not_start_duplicate_recorders(self):

@@ -54,7 +54,7 @@ class MetadataTests(unittest.TestCase):
         self.write_client("29", "구미교차로", "1")
         result = self.load()
         self.assertEqual((result.client_no, result.intersection, result.direction), ("29", "구미교차로", "North"))
-        self.assertEqual(record.camera_filename_prefix(result), "client29_구미교차로_North")
+        self.assertEqual(record.camera_filename_prefix(result), "cam1_ip192.0.2.1__client29_구미교차로_North")
         self.assertNotIn("PRIVATE", repr(result))
 
     def test_leading_zero_client_number_resolves_normalized_metadata_filename(self):
@@ -62,7 +62,7 @@ class MetadataTests(unittest.TestCase):
         self.write_client("29", "구미교차로", "4")
         result = self.load()
         self.assertEqual((result.client_no, result.direction), ("29", "West"))
-        self.assertTrue(record.camera_filename_prefix(result).startswith("client29_"))
+        self.assertTrue(record.camera_filename_prefix(result).startswith("cam1_ip192.0.2.1__client29_"))
 
     def test_all_eight_camera_directions_are_mapped(self):
         for code, expected in (("1", "North"), ("2", "East"), ("3", "South"), ("4", "West"),
@@ -99,13 +99,13 @@ class MetadataTests(unittest.TestCase):
                          ("29", "UnknownIntersection", "UnknownDirection"))
         self.assertEqual(len(messages.output), 1)
 
-    def test_direct_url_legacy_config_uses_clear_unknown_metadata(self):
+    def test_direct_url_legacy_config_keeps_unknown_state_but_omits_unknown_filename_labels(self):
         self.data["cameras"] = [{"name": "custom_cam", "url": "rtsp://192.0.2.1/live"}]
         result = self.load()
         self.assertEqual((result.client_no, result.intersection, result.direction),
                          ("Unknown", "UnknownIntersection", "UnknownDirection"))
         self.assertEqual(record.camera_filename_prefix(result),
-                         "clientUnknown_custom_cam_UnknownIntersection_UnknownDirection")
+                         "custom_cam_ip192.0.2.1")
 
 
 class FilenameTests(unittest.TestCase):
@@ -114,7 +114,7 @@ class FilenameTests(unittest.TestCase):
         prefix = record.camera_filename_prefix(value)
         self.assertIn("구미", prefix)
         self.assertIn("교차로", prefix)
-        self.assertTrue(prefix.startswith("client29_"))
+        self.assertTrue(prefix.startswith("cam1_ip192.0.2.1__client29_"))
         self.assertTrue(prefix.endswith("_North"))
         for char in '/\\:%?*<>|"\n\r\t':
             self.assertNotIn(char, prefix)
@@ -131,8 +131,8 @@ class FilenameTests(unittest.TestCase):
         run = Path("root100%") / "run%06d"
         pattern = record.output_pattern(camera(), run)
         self.assertEqual(pattern,
-                         str(run / "client29_구미교차로_North_pending_").replace("%", "%%") + "%06d.mp4")
-        self.assertEqual(pattern % 7, str(run / "client29_구미교차로_North_pending_000007.mp4"))
+                         str(run / "cam1_ip192.0.2.1__client29_구미교차로_North_pending_").replace("%", "%%") + "%06d.mp4")
+        self.assertEqual(pattern % 7, str(run / "cam1_ip192.0.2.1__client29_구미교차로_North_pending_000007.mp4"))
 
     def test_part_index_accepts_legacy_pending_final_and_collision_names_only(self):
         for name, expected in (
@@ -265,7 +265,7 @@ class SegmentNamerTests(unittest.TestCase):
                 mock.patch.object(record, "SegmentNamer", return_value=namer) as factory:
             recording = record.Recording(command, self.run)
             recording.finish()
-        factory.assert_called_once_with(self.run, self.prefix)
+        factory.assert_called_once_with(self.run, "cam1_ip192.0.2.1__client29_구미교차로_North")
         namer.start.assert_called_once_with()
         namer.close.assert_called_once_with()
 

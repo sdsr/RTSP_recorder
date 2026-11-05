@@ -16,9 +16,9 @@ def release_files(root):
     for pattern in ('*.py', '*.sh', 'components/*.py', 'tools/*.py', 'tools/*.sh',
                     'manual/*.html', 'manual/*.pdf', 'third_party/ffmpeg/*'):
         names.update(path.relative_to(root).as_posix() for path in root.glob(pattern) if path.is_file())
-    report = 'validation/validation_summary.json'
-    if (root / report).is_file():
-        names.add(report)
+    for report in ('validation/validation_summary.json', 'validation/ip_filename_patch.json'):
+        if (root / report).is_file():
+            names.add(report)
     paths = []
     for name in sorted(names):
         path = root / name
@@ -30,7 +30,7 @@ def release_files(root):
 
 def package(root, output, version):
     if not re.fullmatch(r'\d{4}-\d{2}-\d{2}-v\d+(?:\.\d+)*', version):
-        raise ValueError('Version must look like 2026-11-05-v2.1')
+        raise ValueError('Version must look like 2026-11-05-v2.2')
     template = json.loads((root / 'recording.portable.example.json').read_text(encoding='utf-8'))
     if any(urlsplit(camera.get('url', '')).password for camera in template.get('cameras', [])):
         raise ValueError('Never include a camera password in the release template')
@@ -69,7 +69,7 @@ def package(root, output, version):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', default='2026-11-05-v2.1')
+    parser.add_argument('--version', default='2026-11-05-v2.2')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]

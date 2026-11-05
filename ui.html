@@ -166,7 +166,11 @@ function renderRecordingRows(items){
  items.forEach(item=>{
   const row=document.createElement('tr');row.dataset.recordingId=String(item.id);const filename=libraryCell(row,item.name);filename.className='file-name';
   if(libraryTrash&&item.trashed_at){const note=document.createElement('span');note.className='file-note';note.textContent='휴지통 이동 '+formatTime(item.trashed_at);filename.append(note);}
-  libraryCell(row,item.camera||'—','카메라');const dateCell=libraryCell(row,item.date||'—','녹화 날짜');dateCell.className='file-date';libraryCell(row,formatBytes(item.size),'크기');
+  const cameraCell=libraryCell(row,item.camera_host||item.current_camera_host||item.camera||'—','카메라');
+  const cameraNote=document.createElement('span');cameraNote.className='file-note';
+  cameraNote.textContent=(item.camera||'')+(item.camera_host?' · 녹화 당시 주소':item.current_camera_host?' · 현재 설정 주소':' · 녹화 당시 주소 미기록');cameraCell.append(cameraNote);
+  if(!item.camera_host&&item.current_camera_host)cameraCell.title='이전 파일에는 IP가 기록되어 있지 않아 현재 설정 주소를 표시합니다. 녹화 당시 주소와 다를 수 있습니다.';
+  const dateCell=libraryCell(row,item.date||'—','녹화 날짜');dateCell.className='file-date';libraryCell(row,formatBytes(item.size),'크기');
   const stateCell=libraryCell(row,'','상태'),state=document.createElement('span');state.className='file-status'+(item.active?' live':'');state.textContent=libraryTrash?'휴지통':item.active?'녹화 중/보호 중':'저장됨';stateCell.append(state);
   const actions=libraryCell(row,''),group=document.createElement('div');group.className='file-actions';actions.append(group);
   const addButton=(label,operation,danger=false)=>{const button=document.createElement('button');button.type='button';button.className='small'+(danger?' danger':'');button.textContent=label;button.dataset.fileAction='true';button.addEventListener('click',operation);group.append(button);return button;};

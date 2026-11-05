@@ -1,0 +1,46 @@
+{
+  "release_version": "2026-11-05-v2.2",
+  "patch_version": "2026-11-05-v4",
+  "patch_filename": "RTSP_recorder_IP_filename_patch_20261105.py",
+  "patch_file_sha256": "d17446d9869040ef806867c49de144a4a8a8eaf09a1de5cf5827e5854badfc7c",
+  "payload_sha256": "e2aa4cebd421c2ae484039abf9dd9059c20618c0c56cde7af2174390515c057e",
+  "application": "Verified known-base payload and installed it with the documented conservative legacy-host fix; did not execute the supplied installer.",
+  "files": [
+    {
+      "name": "record.py",
+      "bytes": 340524,
+      "known_base_matches": true,
+      "current": "e04c1ba67ff4d9a219b2a3a3d142f4855e29ff394596d268fa2bb60878f70637",
+      "payload": "086fb88d8eb13b45bb18c54fe967d92ae27ceef25e9c5c50844f0692f04aba33",
+      "known_bases": [
+        "e04c1ba67ff4d9a219b2a3a3d142f4855e29ff394596d268fa2bb60878f70637"
+      ]
+    },
+    {
+      "name": "ui.html",
+      "bytes": 65201,
+      "known_base_matches": true,
+      "current": "b892491a2be878107508367adcd837a263d1603282c8897552c8da17e70d6ba3",
+      "payload": "672befcd139ef53f41896210ece519fe78e9470c2a4520eccbd8bd8b2ab719b0",
+      "known_bases": [
+        "b892491a2be878107508367adcd837a263d1603282c8897552c8da17e70d6ba3"
+      ]
+    },
+    {
+      "name": "components/ui_server.py",
+      "bytes": 61946,
+      "known_base_matches": true,
+      "current": "5e8a7e884e1a0e3a6eb35300930169a253665b87c7e6a4ffc608990618bd05ab",
+      "payload": "f862f6d8fc439b5d4dda83b440e3e0e3aaa28362410f7aede50325fa4661cfb6",
+      "known_bases": [
+        "5e8a7e884e1a0e3a6eb35300930169a253665b87c7e6a4ffc608990618bd05ab"
+      ]
+    }
+  ],
+  "supplemental_fix": "Legacy-compatible filenames containing _ip are left unidentified; never claim a historical IP not recorded by the old format.",
+  "installed_sha256": {
+    "record.py": "bb9dee97a1e5b70b6ee9b7ff9620d75157dbec6b5ba56b4d822d827261fd4ec9",
+    "ui.html": "672befcd139ef53f41896210ece519fe78e9470c2a4520eccbd8bd8b2ab719b0",
+    "components/ui_server.py": "f862f6d8fc439b5d4dda83b440e3e0e3aaa28362410f7aede50325fa4661cfb6"
+  }
+}
