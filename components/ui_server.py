@@ -424,6 +424,7 @@ class RecorderUiController:
     def __init__(self, config_path):
         self.config_path = Path(config_path).expanduser().resolve()
         self.action_lock = threading.RLock()
+        self.settings_lock = threading.RLock()
         self.log_lock = threading.Lock()
         self.logs = deque(maxlen=100)
         self.process = None
@@ -435,6 +436,69 @@ class RecorderUiController:
         self.closing = False
         self.cached_settings = None
         self.cached_revision = None
+        self.live_view = LiveViewManager(self.settings)
+        self.camera_profiles = CameraProfileManager(self)
+        self.camera_ping = CameraPingMonitor(self.settings, self.config_path)
+        self.shared_browser_server = None
+
+    def use_recording_profile(self, camera_name, profile, revision):
+        if str(profile) not in ("2", "4"):
+            raise ValueError("녹화 프로필은 2번 또는 4번을 선택하세요.")
+        with self.action_lock:
+            if self.closing:
+                raise ValueError("화면을 종료하고 있습니다.")
+            state = self.state()
+            if state.get("running") or state.get("external_running"):
+                raise ValueError("녹화를 중지한 뒤 녹화 프로필을 변경하세요. 완료 후 예약 녹화를 다시 시작하세요.")
+            data, current = self.read_config()
+            if revision != current:
+                raise ValueError("설정이 변경되었습니다. 저장된 설정을 다시 불러오세요.")
+            cameras = data.get("cameras")
+            if not isinstance(cameras, list):
+                raise ValueError("장비 설정에서 카메라 IP 직접 입력으로 저장한 뒤 변경하세요.")
+            matches = [c for c in cameras if isinstance(c, dict) and c.get("name") == camera_name]
+            if len(matches) != 1:
+                raise ValueError("저장된 카메라를 하나 선택하세요.")
+            camera = matches[0]
+            details = _direct_camera_details(camera)
+            if not details or not re.fullmatch(r"/profile[1-9][0-9]*/media\.smp", details["path"]):
+                raise ValueError("Wisenet 프로필 주소를 사용하는 직접 IP 설정에서 변경할 수 있습니다.")
+            snapshot = self.camera_profiles.read(camera_name)
+            profiles = snapshot.get("profiles", {})
+            if str(profile) not in profiles:
+                raise ValueError("카메라에 선택한 프로필이 없습니다. 먼저 카메라 프로필을 생성하세요.")
+            parsed = urlsplit(camera["url"])
+            camera["url"] = parsed._replace(path="/profile" + str(profile) + "/media.smp").geturl()
+            settings_from_data(data, self.config_path.parent)
+            if self.read_config()[1] != current:
+                raise ValueError("검사 중 설정이 변경되었습니다. 다시 불러오세요.")
+            original, _ = self.read_config()
+            backup = self.config_path.with_name(".recording-profile-backup_" + uuid.uuid4().hex + ".json")
+            atomic_private_json(backup, original)
+            atomic_private_json(self.config_path, data)
+            return {"message": "선택한 카메라의 녹화 주소를 프로필 " + str(profile) + "번으로 저장했습니다. 예약 녹화를 다시 시작하세요.",
+                    "revision": self.read_config()[1]}
+
+    def open_browser_controls(self):
+        with self.action_lock:
+            self.camera_ping.start()
+            if self.shared_browser_server is None:
+                for port in range(8765, 8775):
+                    try:
+                        handler = make_ui_handler(self, secrets.token_urlsafe(32), port)
+                        server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+                        break
+                    except OSError as exc:
+                        if exc.errno != errno.EADDRINUSE:
+                            raise
+                else:
+                    raise ValueError("관리 화면 포트가 사용 중입니다.")
+                server.daemon_threads = True
+                self.shared_browser_server = server
+                threading.Thread(target=server.serve_forever, daemon=True).start()
+            port = self.shared_browser_server.server_address[1]
+            webbrowser.open("http://127.0.0.1:" + str(port) + "/#live")
+            return {"message": "실시간 보기 · 프로필 관리 화면을 브라우저에서 열었습니다."}
 
     def read_config(self):
         if self.config_path.is_symlink() or self.config_path.stat().st_size > 1024 * 1024:
@@ -446,12 +510,16 @@ class RecorderUiController:
         return data, hashlib.sha256(raw).hexdigest()
 
     def settings(self, refresh=False):
-        data, revision = self.read_config()
-        if refresh or self.cached_settings is None or revision != self.cached_revision:
-            self.cached_settings = settings_from_data(data, self.config_path.parent)
-            self.cached_revision = revision
-            self.preview = None
-        return self.cached_settings
+        # Ping/history requests run concurrently with UI operations. Publish one
+        # complete settings snapshot without an older parse replacing a newer one.
+        # Keep this separate from action_lock: close() joins the ping thread.
+        with self.settings_lock:
+            data, revision = self.read_config()
+            if refresh or self.cached_settings is None or revision != self.cached_revision:
+                self.cached_settings = settings_from_data(data, self.config_path.parent)
+                self.cached_revision = revision
+                self.preview = None
+            return self.cached_settings
 
     def configuration(self):
         data, revision = self.read_config()
@@ -937,6 +1005,12 @@ class RecorderUiController:
     def close(self):
         with self.action_lock:
             self.closing = True
+            self.camera_ping.close()
+            self.live_view.close()
+            if self.shared_browser_server is not None:
+                self.shared_browser_server.shutdown()
+                self.shared_browser_server.server_close()
+                self.shared_browser_server = None
             self._stop()
 
 
@@ -978,7 +1052,7 @@ def make_ui_handler(controller, token, port):
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'nonce-" + token
-                             + "'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+                             + "'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
 
         def _allowed(self, api=False, media_token=None):
             if self.headers.get("Host") not in hosts:
@@ -1054,6 +1128,35 @@ def make_ui_handler(controller, token, port):
                     self._json(controller.configuration())
                 elif path == "/api/state":
                     self._json(controller.state())
+                elif path == "/api/live/cameras":
+                    self._json({"cameras": controller.live_view.cameras()})
+                elif path == "/api/ping/history":
+                    self._json(controller.camera_ping.history(self._query_value(query, "camera") or None,
+                               int(self._query_value(query, "hours", "24"))))
+                elif path == "/api/live/stream":
+                    if self.command == "HEAD":
+                        raise ValueError("실시간 영상은 GET 요청으로 받으세요.")
+                    stream = controller.live_view.stream(self._query_value(query, "session"))
+                    try:
+                        first = next(stream)
+                    except StopIteration:
+                        raise ValueError("재생 연결이 종료되었습니다. 다시 재생하세요.") from None
+                    try:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "video/mp4")
+                        self.send_header("Connection", "close")
+                        self._security_headers()
+                        self.end_headers()
+                        self.close_connection = True
+                        self.wfile.write(first)
+                        self.wfile.flush()
+                        for chunk in stream:
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                    except (OSError, ValueError):
+                        pass
+                    finally:
+                        stream.close()
                 elif path == "/api/recordings":
                     trash = self._query_value(query, "trash", "0")
                     if trash not in ("0", "1"):
@@ -1090,6 +1193,21 @@ def make_ui_handler(controller, token, port):
                     result = controller.start(data.get("mode"), data.get("minutes", 5), data.get("start_at") or None)
                 elif self.path == "/api/stop":
                     result = controller.stop()
+                elif self.path == "/api/live/start":
+                    result = controller.live_view.start(data.get("camera"), data.get("profile", "current"))
+                elif self.path == "/api/live/stop":
+                    result = controller.live_view.stop(data.get("session"))
+                elif self.path == "/api/ping/check":
+                    result = controller.camera_ping.request_check()
+                elif self.path == "/api/camera-profiles/read":
+                    result = controller.camera_profiles.read(data.get("camera"))
+                elif self.path == "/api/camera-profiles/plan":
+                    result = controller.camera_profiles.plan(data.get("camera"), default_profile4=True)
+                elif self.path == "/api/camera-profiles/apply":
+                    controller.live_view.stop()
+                    result = controller.camera_profiles.apply(data.get("token"))
+                elif self.path == "/api/camera-profiles/recording":
+                    result = controller.use_recording_profile(data.get("camera"), data.get("profile"), data.get("revision"))
                 elif self.path == "/api/forecast":
                     result = controller.forecast()
                 elif self.path == "/api/key":
@@ -1115,6 +1233,7 @@ def run_recorder_ui(config_path, port=8765, autostart=False):
     handler = make_ui_handler(controller, secrets.token_urlsafe(32), port)
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     server.daemon_threads = True
+    controller.camera_ping.start()
     stopping = threading.Event()
 
     def stop_server(*_):

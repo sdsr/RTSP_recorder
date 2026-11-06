@@ -228,6 +228,8 @@ class RecorderDesktopApp:
         self.stop_button = self.ttk.Button(controls, text="녹화 중지", command=lambda: self.action(self.controller.stop))
         self.stop_button.pack(side="left", padx=8)
         self.ttk.Button(controls, text="저장 폴더 열기", command=self.open_output).pack(side="right")
+        self.ttk.Button(controls, text="실시간 보기 · 프로필 관리",
+                        command=lambda: self.action(self.controller.open_browser_controls)).pack(side="right", padx=8)
         self.summary_text = self.tk.StringVar(self.root, "")
         self.ttk.Label(parent, textvariable=self.summary_text, wraplength=950).grid(row=2, column=0, sticky="w", pady=8)
         once = self.ttk.LabelFrame(parent, text="한 번만 녹화", padding=14)
@@ -915,6 +917,7 @@ def run_recorder_gui(config_path):
     restore_signals = lambda: None
     try:
         app = RecorderDesktopApp(root, tk, ttk, (filedialog, messagebox), controller)
+        controller.camera_ping.start()
         restore_signals = desktop_signal_watch(root, app)
         root.mainloop()
     finally:

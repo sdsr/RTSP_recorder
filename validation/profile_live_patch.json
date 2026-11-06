@@ -1,0 +1,105 @@
+{
+  "release_version": "2026-11-06-v2.3",
+  "patch_version": "2026-11-06-v5",
+  "patch_zip_sha256": "ff66e24071282ff0278db4dec6d95937d03e816565983f1bd6a26f285f2c7784",
+  "payload_sha256": "5a1223dde66cc7629dbe9994a4cd406b1689b9751051a59e928296012afb08a5",
+  "files": [
+    {
+      "name": "record.py",
+      "bytes": 415725,
+      "current_sha256": "bb9dee97a1e5b70b6ee9b7ff9620d75157dbec6b5ba56b4d822d827261fd4ec9",
+      "payload_sha256": "64dfbc68ded99cbdbb2dc8591838324c86f1c946079aa5a8837b3c26d898197c",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "086fb88d8eb13b45bb18c54fe967d92ae27ceef25e9c5c50844f0692f04aba33",
+        "e04c1ba67ff4d9a219b2a3a3d142f4855e29ff394596d268fa2bb60878f70637"
+      ]
+    },
+    {
+      "name": "ui.html",
+      "bytes": 86646,
+      "current_sha256": "672befcd139ef53f41896210ece519fe78e9470c2a4520eccbd8bd8b2ab719b0",
+      "payload_sha256": "5c292b31dc7f3c6603ccd5c7a27f0a7adb593b213847b73cc231afc8262708cc",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "672befcd139ef53f41896210ece519fe78e9470c2a4520eccbd8bd8b2ab719b0",
+        "b892491a2be878107508367adcd837a263d1603282c8897552c8da17e70d6ba3"
+      ]
+    },
+    {
+      "name": "components/ui_server.py",
+      "bytes": 68890,
+      "current_sha256": "f862f6d8fc439b5d4dda83b440e3e0e3aaa28362410f7aede50325fa4661cfb6",
+      "payload_sha256": "3142b56da67ed9045c409f4352dc9dd2d22c0430e557ca35de34de411e5588f6",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "5e8a7e884e1a0e3a6eb35300930169a253665b87c7e6a4ffc608990618bd05ab",
+        "f862f6d8fc439b5d4dda83b440e3e0e3aaa28362410f7aede50325fa4661cfb6"
+      ]
+    },
+    {
+      "name": "components/desktop_gui.py",
+      "bytes": 54499,
+      "current_sha256": "ccfac9835369f697baf2bc1d527a498ec70be24d11c6c6b52432e136658e7070",
+      "payload_sha256": "b5a6f642bf4833be5f11e3948d68ed333ca871fce2ed32399b79f8be38c835d6",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "ccfac9835369f697baf2bc1d527a498ec70be24d11c6c6b52432e136658e7070"
+      ]
+    },
+    {
+      "name": "build_embedded.py",
+      "bytes": 1595,
+      "current_sha256": "c68628ab230802ce5194e672acd4a311e3e637b1b434b0d3976b65caf5d37826",
+      "payload_sha256": "904153666fcc666463485b43edf151d0a50325a2f24ab027ca59b6d542ec5c2c",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "c68628ab230802ce5194e672acd4a311e3e637b1b434b0d3976b65caf5d37826"
+      ]
+    },
+    {
+      "name": "components/live_view.py",
+      "bytes": 15964,
+      "current_sha256": null,
+      "payload_sha256": "5ade6bf0d48a546dcddb53dc365f7c5dfd9ff158a63724f69372502229fb72a9",
+      "known_base_matches": false,
+      "known_base_sha256": []
+    },
+    {
+      "name": "components/camera_profiles.py",
+      "bytes": 26896,
+      "current_sha256": null,
+      "payload_sha256": "229ffeae65107c94565f0f9e099cebf8b740245b17438e0a0f0e018a6a443605",
+      "known_base_matches": false,
+      "known_base_sha256": []
+    },
+    {
+      "name": "components/camera_ping.py",
+      "bytes": 15338,
+      "current_sha256": null,
+      "payload_sha256": "a10e38bc224aa73ee35a54d67f4d283fbe7d0411552363ca7fda2f25ce79409e",
+      "known_base_matches": false,
+      "known_base_sha256": []
+    }
+  ],
+  "merge_note": "record.py differs from the accepted patch base only by the v2.2 legacy filename ambiguity guard; retained that fix while importing the v5 features.",
+  "camera_settings_changed_during_application": false,
+  "installed_sha256": {
+    "record.py": "fdd39183780e736983dc9cd72b18f377ecd431e50d5db89655864851b34e8bc9",
+    "ui.html": "5c292b31dc7f3c6603ccd5c7a27f0a7adb593b213847b73cc231afc8262708cc",
+    "components/ui_server.py": "f748eb543dcdf818750c85ffdce8db63d877ffb0dd39a3ad2786aee1458c0e6f",
+    "components/desktop_gui.py": "b5a6f642bf4833be5f11e3948d68ed333ca871fce2ed32399b79f8be38c835d6",
+    "build_embedded.py": "904153666fcc666463485b43edf151d0a50325a2f24ab027ca59b6d542ec5c2c",
+    "components/live_view.py": "76150b2072bad3b1e73fa6d3c86bf06148a73155823347ac8c96356c0b02595f",
+    "components/camera_profiles.py": "2d586be6a8d40966595b1d20eb7f9b14df0158f81aca1dcf029a214ccbd46dc2",
+    "components/camera_ping.py": "bde8ecd25b2cb00fb6f2883a794f03bbd3ea3d5f9cc5212fea80d65147adb6bf"
+  },
+  "integration_fixes": [
+    "Retained v2.2 legacy filename host guard",
+    "Serialized concurrent settings cache reads",
+    "Rejected profile/recording-URL writes while closing",
+    "Preserved partial camera-change warning if backup journaling fails",
+    "Tolerated FFmpeg child exit during cleanup",
+    "Disabled Linux ping/history operations in non-Linux settings preview"
+  ]
+}

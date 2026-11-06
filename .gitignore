@@ -15,6 +15,11 @@ __pycache__/
 .weather-http-*.json
 .weather-http-*.lock
 .recorder-status.json
+.camera-ping-history.json
+.camera-profile-backups/
+.recording-profile-backup_*.json
+.recorder-init-*
+.recorder-save-*
 *.mp4
 *.mkv
 *.log

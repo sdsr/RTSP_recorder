@@ -14,9 +14,10 @@ def release_files(root):
              'weather_regions.json', 'recording.example.ini', 'recording.example.json',
              'recording.weather.example.json', 'recording.portable.example.json', 'bin/ffmpeg'}
     for pattern in ('*.py', '*.sh', 'components/*.py', 'tools/*.py', 'tools/*.sh',
-                    'manual/*.html', 'manual/*.pdf', 'third_party/ffmpeg/*'):
+                    'manual/*.html', 'manual/*.pdf', 'manual/*.md', 'third_party/ffmpeg/*'):
         names.update(path.relative_to(root).as_posix() for path in root.glob(pattern) if path.is_file())
-    for report in ('validation/validation_summary.json', 'validation/ip_filename_patch.json'):
+    for report in ('validation/validation_summary.json', 'validation/ip_filename_patch.json',
+                   'validation/profile_live_patch.json'):
         if (root / report).is_file():
             names.add(report)
     paths = []
@@ -30,7 +31,7 @@ def release_files(root):
 
 def package(root, output, version):
     if not re.fullmatch(r'\d{4}-\d{2}-\d{2}-v\d+(?:\.\d+)*', version):
-        raise ValueError('Version must look like 2026-11-05-v2.2')
+        raise ValueError('Version must look like 2026-11-06-v2.3')
     template = json.loads((root / 'recording.portable.example.json').read_text(encoding='utf-8'))
     if any(urlsplit(camera.get('url', '')).password for camera in template.get('cameras', [])):
         raise ValueError('Never include a camera password in the release template')
@@ -69,7 +70,7 @@ def package(root, output, version):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', default='2026-11-05-v2.2')
+    parser.add_argument('--version', default='2026-11-06-v2.3')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
