@@ -200,17 +200,149 @@ def _sm_route(connection, target=None, source=None):
 def _sm_no_collision(connection, target):
     if target == connection['target']:
         return
-    binary = _sm_shutil.which('arping')
-    if not binary:
-        raise SwitchManagerError('새 관리 IP 중복 검사에 arping이 필요합니다. Ubuntu: sudo apt install iputils-arping')
+    probe = globals().get('_camera_admin_address_available')
+    if not callable(probe):
+        raise SwitchManagerError('새 관리 IP 중복 검사 구성요소가 없습니다. 카메라 관리 업데이트를 전체 적용한 뒤 다시 시도하세요.')
     try:
-        completed = _sm_subprocess.run([binary, '-D', '-I', connection['interface'], '-c', '3', '-w', '5', target],
-                                       capture_output=True, text=True, timeout=8)
+        probe(target, {'dev': connection['interface'], 'source': connection['source']})
+    except ValueError as exc:
+        # The shared parser understands both Habets and iputils arping and
+        # distinguishes missing raw-packet permission from an unused address.
+        if type(exc).__name__ == 'CameraActivationError':
+            raise SwitchManagerError(str(exc)) from None
+        raise SwitchManagerError('새 관리 IP 중복 검사 응답을 확인하지 못했습니다. 변경하지 않습니다.') from None
     except (OSError, _sm_subprocess.SubprocessError):
         raise SwitchManagerError('새 관리 IP 중복 검사를 완료하지 못했습니다. 변경하지 않습니다.') from None
-    # iputils arping -D succeeds only when no duplicate replied; errors also reject.
-    if completed.returncode != 0:
-        raise SwitchManagerError('새 관리 IP에 응답이 있거나 중복 검사 권한이 없습니다. 주소 충돌 여부를 확인하세요.')
+
+
+def _sm_fdb_entries(raw):
+    """Parse observed forwarding entries; never infer cable endpoints from them."""
+    entries = set()
+    for row in _sm_clean(raw).splitlines():
+        mac = _sm_re.search(_SM_MAC, row)
+        if not mac:
+            continue
+        vlan = _sm_re.match(r'^\s*(\d+)\s+', row)
+        vlan_id = int(vlan.group(1)) if vlan and 1 <= int(vlan.group(1)) <= 4094 else None
+        for port in _sm_re.findall(r'Ethernet1/0/(\d+)\b', row, _sm_re.I):
+            if 1 <= int(port) <= 10:
+                entries.add((_sm_mac(mac.group()), int(port), vlan_id))
+    return [{'mac': mac, 'port': port, 'vlan': vlan}
+            for mac, port, vlan in sorted(entries, key=lambda entry: (entry[0], entry[1], entry[2] or 0))]
+
+
+def _sm_link_parent(interface, links):
+    by_name = {row['ifname'].split('@')[0]: row for row in links}
+    by_index = {row['ifindex']: row for row in links}
+    current, seen = by_name.get(interface), set()
+    while current:
+        if _sm_re.fullmatch(r'enp2[0-9A-Za-z]*', current.get('ifname', '')):
+            return current['ifname']
+        if current['ifindex'] in seen or current.get('linkinfo', {}).get('info_kind') != 'vlan':
+            return None
+        seen.add(current['ifindex'])
+        parent = current.get('link')
+        current = by_name.get(parent) if isinstance(parent, str) else by_index.get(current.get('link_index', parent))
+    return None
+
+
+def _sm_camera_neighbors(cameras, parent):
+    """Read routes and existing neighbor cache only: no ping, ARP or IP changes."""
+    links = _sm_ip_json('-d', 'link', 'show')
+    cache, result = {}, []
+    for camera in cameras:
+        item = dict(camera, interface=None, neighbors=[], route_error='')
+        if not camera['ip']:
+            item['route_error'] = '등록된 카메라 주소가 IPv4 주소가 아닙니다.'
+            result.append(item)
+            continue
+        try:
+            routes = _sm_ip_json('-4', 'route', 'get', camera['ip'])
+            if len(routes) != 1:
+                raise SwitchManagerError('카메라 경로가 단일 경로가 아닙니다.')
+            route, interface = routes[0], routes[0].get('dev')
+            item['interface'] = interface
+            if route.get('gateway') or route.get('type') in ('local', 'unreachable', 'blackhole', 'prohibit') or _sm_link_parent(interface, links) != parent:
+                raise SwitchManagerError('이 허브와 같은 enp2 NIC의 직접 경로가 아닙니다. 다른 NIC·LTE·게이트웨이 경로는 대조하지 않습니다.')
+            if interface not in cache:
+                cache[interface] = _sm_ip_json('-4', 'neigh', 'show', 'dev', interface)
+            for row in cache[interface]:
+                if row.get('dst') != camera['ip']:
+                    continue
+                state = row.get('state', [])
+                states = state if isinstance(state, list) else str(state).replace(',', ' ').split()
+                try:
+                    mac = _sm_mac(row.get('lladdr', ''))
+                except SwitchManagerError:
+                    mac = None
+                item['neighbors'].append({'mac': mac, 'state': sorted(set(str(value).upper() for value in states))})
+        except SwitchManagerError as exc:
+            item['route_error'] = str(exc)
+        result.append(item)
+    return result
+
+
+def _sm_camera_matches(observations, fdb, ports, ed_ports):
+    """Correlate cache observations; ambiguous results never acquire a port."""
+    by_port = {row['port']: row for row in ports}
+    matches, ip_counts = [], {}
+    for camera in observations:
+        if camera['ip']:
+            ip_counts[camera['ip']] = ip_counts.get(camera['ip'], 0) + 1
+    for camera in observations:
+        match = {key: camera[key] for key in ('id', 'name', 'ip', 'interface')}
+        match.update(mac=None, mac_candidates=[], neighbor_state=[], ports=[], direct_port=None,
+                     status='unresolved', reason='', fdb_entries=[])
+        neighbors = camera.get('neighbors', [])
+        match['neighbor_state'] = sorted({state for row in neighbors for state in row['state']})
+        known_states = {'REACHABLE', 'STALE', 'DELAY', 'PROBE', 'PERMANENT', 'NOARP'}
+        valid = [row for row in neighbors if row['mac'] and row['state'] and set(row['state']).issubset(known_states)]
+        macs = sorted({row['mac'] for row in valid})
+        match['mac_candidates'] = macs
+        if len(macs) == 1:
+            match['mac'] = macs[0]
+            match['fdb_entries'] = [row for row in fdb if row['mac'] == macs[0]]
+            match['ports'] = sorted({row['port'] for row in match['fdb_entries']})
+        if camera.get('route_error'):
+            match.update(status='off_network', reason=camera['route_error'])
+        elif ip_counts.get(camera['ip'], 0) > 1:
+            match.update(status='ambiguous', reason='같은 IP가 여러 카메라 항목에 등록되어 있습니다. 어느 실제 카메라인지 구분할 수 없습니다.')
+        elif len(macs) > 1:
+            match.update(status='ambiguous', reason='같은 IP에서 여러 MAC 관측값이 있습니다. IP 중복 또는 변경 이력을 확인해야 합니다.')
+        elif not macs:
+            match['reason'] = '유효한 ARP/이웃 캐시가 없습니다. 자동 통신 검사나 포트 조작은 하지 않았습니다.'
+        elif len(match['ports']) > 1:
+            match.update(status='ambiguous', reason='같은 MAC이 여러 허브 포트에서 보입니다. 포트를 확정할 수 없습니다.')
+        elif not match['ports']:
+            match['reason'] = 'ARP 캐시의 MAC이 현재 허브 MAC 학습표에 없습니다.'
+        else:
+            port = by_port[match['ports'][0]]
+            if port['port'] >= 9 or port['mode'] != 'access' or port['port'] in ed_ports:
+                match.update(status='uplink', reason='광·업링크·ED 경로에서 학습된 MAC입니다. 이 포트를 카메라 직결 포트로 판단하지 않습니다.')
+            elif len(port.get('macs', [])) != 1:
+                match.update(status='ambiguous', reason='해당 포트에서 여러 MAC이 학습되었습니다. 하위 허브 또는 공유 연결일 수 있습니다.')
+            elif port['link'] != 'up' or port['admin_up'] is not True:
+                match['reason'] = '학습 기록은 있지만 현재 포트 링크 또는 사용 상태가 켜짐으로 확인되지 않습니다.'
+            elif len({row['vlan'] for row in match['fdb_entries']}) != 1 or match['fdb_entries'][0]['vlan'] != port['pvid']:
+                match.update(status='ambiguous', reason='MAC 학습 VLAN과 포트 VLAN이 단일 값으로 일치하지 않습니다.')
+            else:
+                recent = bool(valid) and all(row['state'] == ['REACHABLE'] for row in valid)
+                match.update(direct_port=port['port'], status='matched' if recent else 'cached',
+                             reason=('ARP 캐시가 REACHABLE이고 같은 MAC이 단일 Access 포트에서 학습되었습니다.' if recent else
+                                     '이전 ARP/정적 캐시와 현재 MAC 학습표가 일치합니다. 현재 카메라 응답을 확인한 결과는 아닙니다.') +
+                                    ' 학습 포트이며, 물리적 직결·IP 중복 부재를 보장하지 않습니다.')
+        matches.append(match)
+    # One MAC shared by different configured IPs may be an alias or proxy. It is
+    # not sufficient evidence to assign either camera to a physical port.
+    mac_ips = {}
+    for match in matches:
+        if match['mac']:
+            mac_ips.setdefault(match['mac'], set()).add(match['ip'])
+    for match in matches:
+        if match['mac'] and len(mac_ips[match['mac']]) > 1:
+            match.update(status='ambiguous', direct_port=None,
+                         reason='서로 다른 카메라 IP가 같은 MAC으로 관측됩니다. 주소 별칭·중복 등록·프록시 여부를 확인해야 합니다.')
+    return matches
 
 
 class _SwitchTelnet:
@@ -394,7 +526,7 @@ class SwitchManager:
     are supplied per request, retained only during that request and never saved.
     No command changes host addresses, routes, Netplan, LTE, PoE, ring or uplinks.
     """
-    def __init__(self, config_path):
+    def __init__(self, config_path, cameras_provider=None):
         self.config_path = _sm_Path(config_path)
         self._plans = {}
         self._closing = False
@@ -403,6 +535,43 @@ class SwitchManager:
         self._route = _sm_route
         self._collision = _sm_no_collision
         self._sleep = _sm_time.sleep
+        self._cameras_provider = cameras_provider
+        self._camera_neighbors = _sm_camera_neighbors
+
+    def _map_cameras(self, snapshot, raw):
+        snapshot['camera_matches'] = []
+        snapshot['camera_mapping_warnings'] = []
+        snapshot['camera_mapping_note'] = ('기존 ARP 캐시와 현재 허브 MAC 학습표를 대조한 결과입니다. '
+                                           '새 핑·ARP 검사는 하지 않으며, IP 중복 부재나 카메라의 물리적 직결을 보장하지 않습니다. '
+                                           '카메라 포트 등록·제어 대상은 자동 변경하지 않습니다.')
+        if self._cameras_provider is None:
+            return
+        try:
+            registered = self._cameras_provider()
+            if not isinstance(registered, (list, tuple)) or len(registered) > 256:
+                raise SwitchManagerError('카메라 목록은 최대 256개의 IP 항목이어야 합니다.')
+            cameras = []
+            for index, camera in enumerate(registered):
+                if not isinstance(camera, dict):
+                    raise SwitchManagerError('카메라 목록 형식을 확인하지 못했습니다.')
+                try:
+                    ip = _sm_ip(camera.get('ip'))
+                except SwitchManagerError:
+                    ip = ''
+                cameras.append({'id': str(camera.get('id', index))[:200],
+                                'name': str(camera.get('name') or camera.get('id') or index)[:200], 'ip': ip})
+            observations = self._camera_neighbors(cameras, snapshot['route']['parent']) if cameras else []
+            fdb = _sm_fdb_entries(raw['show mac-address-table'])
+            matches = _sm_camera_matches(observations, fdb, snapshot['ports'], snapshot['ed_ports'])
+            snapshot['camera_matches'] = matches
+            for match in matches:
+                if match['direct_port'] is not None:
+                    port = next(row for row in snapshot['ports'] if row['port'] == match['direct_port'])
+                    port['cameras'].append({key: match[key] for key in ('id', 'name', 'ip', 'status', 'reason')})
+        except Exception:
+            # Mapping is supplementary evidence. A camera settings error must not
+            # conceal switch state or leak RTSP credential-bearing exceptions.
+            snapshot['camera_mapping_warnings'].append('카메라 목록 또는 이웃 캐시를 읽지 못해 카메라-포트 대조를 완료하지 못했습니다.')
 
     def _begin_operation(self, busy_message):
         if not self._operation_lock.acquire(False):
@@ -539,7 +708,8 @@ class SwitchManager:
         supported = self._check_identity(identity, connection)
         result = {'switch_id': connection['id'], 'connection': dict(connection), 'identity': identity,
                   'route': route, 'supported': supported, 'ports': [], 'management': None,
-                  'vlans': [], 'ed_ports': [], 'can_modify': False, 'warnings': []}
+                  'vlans': [], 'ed_ports': [], 'can_modify': False, 'warnings': [],
+                  'camera_matches': [], 'camera_mapping_warnings': []}
         if not supported:
             result['warnings'].append('이 모델/펌웨어의 쓰기 명령은 검증되지 않았습니다. 장비 식별 정보만 조회했습니다.')
             return result, {}
@@ -610,7 +780,7 @@ class SwitchManager:
             result['ports'].append({'port': port, 'link': state.group(2).lower() if state else 'unknown',
                                     'admin_up': None if rows is None else 'shutdown' not in rows,
                                     'mode': mode, 'pvid': pvid, 'protected': bool(reasons), 'reasons': reasons,
-                                    'editable': not reasons, 'mac_count': len(macs)})
+                                    'editable': not reasons, 'mac_count': len(macs), 'macs': sorted(macs), 'cameras': []})
         if not connection['expected_cpu_mac']:
             result['warnings'].append('CPU MAC을 저장하기 전에는 설정을 변경할 수 없습니다.')
         if not ed_known:
@@ -620,6 +790,7 @@ class SwitchManager:
         if 'not configured' not in raw['show reload'].lower():
             result['warnings'].append('기존 재부팅 예약 상태를 확인해야 합니다. 이 도구는 재부팅을 예약하거나 취소하지 않습니다.')
         result['can_modify'] = bool(connection['expected_cpu_mac'] and ed_known and not result['warnings'])
+        self._map_cameras(result, raw)
         return result, raw
 
     def inspect(self, payload):

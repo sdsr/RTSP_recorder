@@ -36,6 +36,30 @@ class ControllerFixture(unittest.TestCase):
 
 
 class ControllerIntegrationTests(ControllerFixture):
+    def test_unconfigured_switch_inventory_is_empty_without_runtime_validation(self):
+        self.write(dict(self.data,cameras=[]))
+        with mock.patch.object(self.controller,'settings',side_effect=AssertionError('unconfigured runtime')):
+            self.assertEqual(self.controller._switch_cameras(),[])
+        self.write(self.data)
+        inventory=self.controller._switch_cameras()
+        self.assertEqual([row['ip'] for row in inventory],['192.0.2.1','192.0.2.2'])
+        self.assertNotIn('SECRET',json.dumps(inventory))
+
+    def test_activation_actions_require_valid_payload_stopped_recording_and_open_ui(self):
+        with mock.patch.object(self.controller.camera_activation,'preview',return_value={'token':'preview-only'}) as preview:
+            for action,data in (('close',{}),('preview',None)):
+                with self.subTest(action=action),self.assertRaises(ValueError):
+                    self.controller.activation_action(action,data)
+            with mock.patch.object(self.controller,'state',return_value={'running':True}),self.assertRaises(ValueError):
+                self.controller.activation_action('preview',{'ip':'192.0.2.100'})
+            preview.assert_not_called()
+            result=self.controller.activation_action('preview',{'ip':'192.0.2.100'})
+            self.assertEqual(result,{'token':'preview-only'})
+            self.controller.closing=True
+            with self.assertRaises(ValueError):
+                self.controller.activation_action('preview',{'ip':'192.0.2.100'})
+            self.assertEqual(preview.call_count,1)
+
     def test_recording_profile_change_only_retargets_selected_url_and_backs_up(self):
         original=self.config.read_bytes()
         revision=self.controller.read_config()[1]
@@ -173,6 +197,26 @@ class HttpIntegrationTests(ControllerFixture):
             with self.request('ping/history?hours=6&camera=cam1') as response:
                 self.assertEqual(json.load(response),{'samples':[]})
             history.assert_called_once_with('cam1',6)
+
+    def test_camera_admin_and_activation_routes_reject_missing_token_before_dispatch(self):
+        for method in ('inspect','plan','apply','register'):
+            with self.subTest(method=method),mock.patch.object(self.controller.camera_admin,method,return_value={'ok':True}) as action:
+                with self.assertRaises(HTTPError) as denied:
+                    self.request('camera-admin/'+method,{'camera':'cam1'},token=False)
+                self.assertEqual(denied.exception.code,403);denied.exception.close()
+                action.assert_not_called()
+                with self.request('camera-admin/'+method,{'camera':'cam1'}) as response:
+                    self.assertTrue(json.load(response)['ok'])
+                action.assert_called_once_with({'camera':'cam1'})
+        for endpoint,method in (('inspect','inspect'),('plan','preview'),('apply','apply')):
+            with self.subTest(endpoint=endpoint),mock.patch.object(self.controller,'activation_action',return_value={'ok':True}) as action:
+                with self.assertRaises(HTTPError) as denied:
+                    self.request('camera-activation/'+endpoint,{'token':'test'},token=False)
+                self.assertEqual(denied.exception.code,403);denied.exception.close()
+                action.assert_not_called()
+                with self.request('camera-activation/'+endpoint,{'token':'test'}) as response:
+                    self.assertTrue(json.load(response)['ok'])
+                action.assert_called_once_with(method,{'token':'test'})
 
 
 if __name__=='__main__':

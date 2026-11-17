@@ -1,9 +1,9 @@
 {
-  "version": "2026-11-17-v2.4",
+  "version": "2026-11-17-v2.5",
   "validation_date_kst": "2026-11-17",
   "environment": "Ubuntu 26.04 x86_64, Python 3.14, Tk 8.6; native Linux temporary filesystem",
   "unit_tests": {
-    "run": 465,
+    "run": 527,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -19,8 +19,8 @@
   "real_camera_recording_retested": false,
   "system_service_changed": false,
   "network_configuration_changed": false,
-  "elapsed_seconds": 23.03,
-  "recorder_sha256": "acda17d2c7517c97c968652bb4c441caf21900e8f5ae521dae45d9c9b3b70a2d",
+  "elapsed_seconds": 24.87,
+  "recorder_sha256": "99dbd0e44bdb9ffadf8a6f5957647e889fc722ebf43cc3e2a65a40506b064606",
   "browser_ui": {
     "blank_initial_fields_verified": true,
     "manual_camera_registration_saved": true,
@@ -28,5 +28,12 @@
     "manual_region_preserved": true,
     "javascript_errors": 0,
     "real_device_access": false
-  }
+  },
+  "camera_admin_ui": {
+    "empty_inventory_screen_verified": true,
+    "initialized_camera_account_blank_verified": true,
+    "device_access_mocked": true
+  },
+  "raw_packet_capabilities_changed": false,
+  "system_packages_installed": false
 }

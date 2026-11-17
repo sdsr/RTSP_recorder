@@ -1,0 +1,259 @@
+{
+  "release_version": "2026-11-17-v2.5",
+  "patch_version": "2026-11-17-camera-admin",
+  "payload_sha256": "3ba5f9f7200afd5e02c1bf76ce5ff68a97798348aa482fa0f8e1fe41d684fc84",
+  "files": [
+    {
+      "name": "record.py",
+      "bytes": 600718,
+      "current_sha256": "acda17d2c7517c97c968652bb4c441caf21900e8f5ae521dae45d9c9b3b70a2d",
+      "payload_sha256": "6f28263d165cefb00463fdfbeb144eaf4fa1e4ea86a99ec1ada8a44a223a8a17",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "086fb88d8eb13b45bb18c54fe967d92ae27ceef25e9c5c50844f0692f04aba33",
+        "24a91a11a6ed50a2cb2c968ab5eef8ac1ad2c486dddf43cc9e52b4acd630585f",
+        "31a6bf51fb02e0690f6a8506dd88e6bc53407cbbeb4c9a558fa19b4e0cf51b1f",
+        "5be91a4aba1325f200226e466068e0ae37e2479e27cadaf591efa49010908e36",
+        "64dfbc68ded99cbdbb2dc8591838324c86f1c946079aa5a8837b3c26d898197c",
+        "bb9dee97a1e5b70b6ee9b7ff9620d75157dbec6b5ba56b4d822d827261fd4ec9",
+        "bd35bc5966fc264682bae2a478ed76bdae00db993c16613bee707033c43ee678",
+        "e04c1ba67ff4d9a219b2a3a3d142f4855e29ff394596d268fa2bb60878f70637"
+      ]
+    },
+    {
+      "name": "ui.html",
+      "bytes": 133377,
+      "current_sha256": "7d2eeabf5f0d48786c764636609500d5caa361edda123966fade6fe56d2a72a4",
+      "payload_sha256": "a5be8384c86c391f96883860c10f16952244e303c1a4d6f90758f203f8b1857b",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "2be5df67485b4d7bcf72551f0916ab31145cccb0678efb8830ae88a192751fa9",
+        "487bb9af0d9edf3ac205381fb23e2341f99d57f1f4ba95ec21041da34394e232",
+        "5c292b31dc7f3c6603ccd5c7a27f0a7adb593b213847b73cc231afc8262708cc",
+        "672befcd139ef53f41896210ece519fe78e9470c2a4520eccbd8bd8b2ab719b0",
+        "a5be8384c86c391f96883860c10f16952244e303c1a4d6f90758f203f8b1857b",
+        "b892491a2be878107508367adcd837a263d1603282c8897552c8da17e70d6ba3"
+      ]
+    },
+    {
+      "name": "build_embedded.py",
+      "bytes": 2060,
+      "current_sha256": "f1fe1107fb28a6700f18d73dd5fef99d483ba72e5a0a07c42060caf627373096",
+      "payload_sha256": "6b4791615908ecf8ffe62b66720bb647729460691cf62315b7765851de3e1f94",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "6b4791615908ecf8ffe62b66720bb647729460691cf62315b7765851de3e1f94",
+        "904153666fcc666463485b43edf151d0a50325a2f24ab027ca59b6d542ec5c2c",
+        "c68628ab230802ce5194e672acd4a311e3e637b1b434b0d3976b65caf5d37826",
+        "f1fe1107fb28a6700f18d73dd5fef99d483ba72e5a0a07c42060caf627373096"
+      ]
+    },
+    {
+      "name": "components/ui_server.py",
+      "bytes": 82184,
+      "current_sha256": "e9e0bfec8c2ed98a407724cb7f5f73dc18dacafc61ffb03758911763f9fb6eb8",
+      "payload_sha256": "5593bf2c6f7e10bbeac44e3c579b6f85c13f7a98c8b6966d05780ce52a89db4d",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "3142b56da67ed9045c409f4352dc9dd2d22c0430e557ca35de34de411e5588f6",
+        "5593bf2c6f7e10bbeac44e3c579b6f85c13f7a98c8b6966d05780ce52a89db4d",
+        "5e8a7e884e1a0e3a6eb35300930169a253665b87c7e6a4ffc608990618bd05ab",
+        "86410c75b4d63d15775af56be669d89840875ebe5e0c3d1710bf57ab9be951b4",
+        "bf502bf4c1d6dd2a54be6331d8cdbb441bedfcd2b9fce14704a37ebf3f2d2c2d",
+        "f862f6d8fc439b5d4dda83b440e3e0e3aaa28362410f7aede50325fa4661cfb6"
+      ]
+    },
+    {
+      "name": "components/desktop_gui.py",
+      "bytes": 55909,
+      "current_sha256": "da7b5165ec577c2fc93dbbe156b6045a22bdc145a16bbef68d51698861709fa9",
+      "payload_sha256": "193a6382ca98fe30cc60771ead5ae5f5fcb74951af5489638085d0aff87bcb1c",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "193a6382ca98fe30cc60771ead5ae5f5fcb74951af5489638085d0aff87bcb1c",
+        "b5a6f642bf4833be5f11e3948d68ed333ca871fce2ed32399b79f8be38c835d6",
+        "ccfac9835369f697baf2bc1d527a498ec70be24d11c6c6b52432e136658e7070"
+      ]
+    },
+    {
+      "name": "components/live_view.py",
+      "bytes": 15964,
+      "current_sha256": "76150b2072bad3b1e73fa6d3c86bf06148a73155823347ac8c96356c0b02595f",
+      "payload_sha256": "5ade6bf0d48a546dcddb53dc365f7c5dfd9ff158a63724f69372502229fb72a9",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "5ade6bf0d48a546dcddb53dc365f7c5dfd9ff158a63724f69372502229fb72a9"
+      ]
+    },
+    {
+      "name": "components/camera_profiles.py",
+      "bytes": 26896,
+      "current_sha256": "2d586be6a8d40966595b1d20eb7f9b14df0158f81aca1dcf029a214ccbd46dc2",
+      "payload_sha256": "229ffeae65107c94565f0f9e099cebf8b740245b17438e0a0f0e018a6a443605",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "229ffeae65107c94565f0f9e099cebf8b740245b17438e0a0f0e018a6a443605"
+      ]
+    },
+    {
+      "name": "components/camera_ping.py",
+      "bytes": 15338,
+      "current_sha256": "bde8ecd25b2cb00fb6f2883a794f03bbd3ea3d5f9cc5212fea80d65147adb6bf",
+      "payload_sha256": "a10e38bc224aa73ee35a54d67f4d283fbe7d0411552363ca7fda2f25ce79409e",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "a10e38bc224aa73ee35a54d67f4d283fbe7d0411552363ca7fda2f25ce79409e"
+      ]
+    },
+    {
+      "name": "components/weather.py",
+      "bytes": 19763,
+      "current_sha256": "812b1d19b2ec97067a63d220bcbe46811d0fa367c448aa9bec9fb71565016344",
+      "payload_sha256": "ca4b5c756b9ccf69647dc053f02f139b87c6f0455f76547c501bf84ae143ec4b",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "ca4b5c756b9ccf69647dc053f02f139b87c6f0455f76547c501bf84ae143ec4b"
+      ]
+    },
+    {
+      "name": "components/public_weather.py",
+      "bytes": 17872,
+      "current_sha256": "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a",
+      "payload_sha256": "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a"
+      ]
+    },
+    {
+      "name": "components/desktop_launcher.py",
+      "bytes": 4736,
+      "current_sha256": "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075",
+      "payload_sha256": "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075"
+      ]
+    },
+    {
+      "name": "components/camera_snapshots.py",
+      "bytes": 22892,
+      "current_sha256": "9150be22b6595d572546c98603cf8a5b289165d3a8443e357dc48045457cc917",
+      "payload_sha256": "6dd9878009c8b1f3c8a322448c60262823c824fa53b48b82ca298e731c4f4be5",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "6dd9878009c8b1f3c8a322448c60262823c824fa53b48b82ca298e731c4f4be5"
+      ]
+    },
+    {
+      "name": "components/switch_manager.py",
+      "bytes": 62071,
+      "current_sha256": "4a9e74fd55d329ca6e01440400e666246fee34c914c0491ea98bbe6768b9bf20",
+      "payload_sha256": "b6b6a0c009ed773116e1d86825f5c7a8ccef2ef119339bf1bd35af9331fa8267",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "7770fef11049003df23645c4b57871712b1c0430dfc81d1a72f11b1b6fd21fa2",
+        "b6b6a0c009ed773116e1d86825f5c7a8ccef2ef119339bf1bd35af9331fa8267"
+      ]
+    },
+    {
+      "name": "components/camera_admin.py",
+      "bytes": 38350,
+      "current_sha256": null,
+      "payload_sha256": "1d5c2d22448d4c8115f823f63eeb771f303825ee9793afa97216b9e702643330",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "5605a871e473e954904c25f1abb363e56645d01302b1dc9d3337b21a5b21fd10"
+      ]
+    },
+    {
+      "name": "components/camera_activation.py",
+      "bytes": 26169,
+      "current_sha256": null,
+      "payload_sha256": "894cc9ca0b7b4fd9db7b24a100be18608f33200bf39bfeb321247cf64b1ff79a",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "894cc9ca0b7b4fd9db7b24a100be18608f33200bf39bfeb321247cf64b1ff79a"
+      ]
+    },
+    {
+      "name": "recording.portable.example.json",
+      "bytes": 478,
+      "current_sha256": "19c9db97b879fb7592334acc22add15d380560d18f7eee2c55368e3f76f74cd8",
+      "payload_sha256": "34e06f44a5335364a2f01c1a44d4a3c28ff1f9fabd1e1d2b497a37be56d8a1eb",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "34e06f44a5335364a2f01c1a44d4a3c28ff1f9fabd1e1d2b497a37be56d8a1eb",
+        "7f705df451a749f09d8a5bd22e86ab848d9f101b447f184ad6db2464ad8e7886"
+      ]
+    },
+    {
+      "name": "recording.example.json",
+      "bytes": 749,
+      "current_sha256": "1851ec42626652038c5d325654dd2f8f81c1bfd5ba7981294b13c5813c5273ec",
+      "payload_sha256": "0cdb928f493cc9eb347d9beef55b3e1b2e53582d1932622f2a0dbb3900861eb3",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "0cdb928f493cc9eb347d9beef55b3e1b2e53582d1932622f2a0dbb3900861eb3",
+        "aecbd07cfc0688ac8637705ed9ee43003352047044d1d3a2d541433fd8dc4634"
+      ]
+    },
+    {
+      "name": "recording.weather.example.json",
+      "bytes": 692,
+      "current_sha256": "3626721f7473142f5f657d5125649fd7aed0c5c149157279f1b42bc0c8ad321a",
+      "payload_sha256": "a210ef2aa66146135ea392facc8da27811cef9b5180fe3d293d86de088155771",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "a210ef2aa66146135ea392facc8da27811cef9b5180fe3d293d86de088155771",
+        "fbf56f47b2a644850f77c806ab4b6aa40d19757f96f6f97f58b708ca2bc085a7"
+      ]
+    },
+    {
+      "name": "recording.example.ini",
+      "bytes": 1178,
+      "current_sha256": "5aea1aa88e966c06163111baad3da472ca0e2ed7e0da3f4136425201185973af",
+      "payload_sha256": "5aea1aa88e966c06163111baad3da472ca0e2ed7e0da3f4136425201185973af",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "5aea1aa88e966c06163111baad3da472ca0e2ed7e0da3f4136425201185973af",
+        "9d47a897125d036b0cbcb8f708cab671297a02b070262383254b834e68fe95f5"
+      ]
+    }
+  ],
+  "merge_notes": [
+    "Kept v2.4 runtime and blank first-run templates instead of reverting them.",
+    "Three-way merged controller, UI and switch changes on the preceding supplied patch base.",
+    "Preserved prior stream, profile, ping, snapshot, weather and lifecycle fixes."
+  ],
+  "device_changes_during_installation": false,
+  "privilege_helper_executed": false,
+  "installed_sha256": {
+    "record.py": "99dbd0e44bdb9ffadf8a6f5957647e889fc722ebf43cc3e2a65a40506b064606",
+    "ui.html": "bde846bf9bf3d4d4ce00be2982ae37349d282335d08473a6db45555136398aee",
+    "build_embedded.py": "6b4791615908ecf8ffe62b66720bb647729460691cf62315b7765851de3e1f94",
+    "components/ui_server.py": "9e386b2ec48e2ae64715e58dc46ede3a78cf5a964b370475d73d709719c6a25a",
+    "components/desktop_gui.py": "da7b5165ec577c2fc93dbbe156b6045a22bdc145a16bbef68d51698861709fa9",
+    "components/live_view.py": "76150b2072bad3b1e73fa6d3c86bf06148a73155823347ac8c96356c0b02595f",
+    "components/camera_profiles.py": "2d586be6a8d40966595b1d20eb7f9b14df0158f81aca1dcf029a214ccbd46dc2",
+    "components/camera_ping.py": "bde8ecd25b2cb00fb6f2883a794f03bbd3ea3d5f9cc5212fea80d65147adb6bf",
+    "components/weather.py": "812b1d19b2ec97067a63d220bcbe46811d0fa367c448aa9bec9fb71565016344",
+    "components/public_weather.py": "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a",
+    "components/desktop_launcher.py": "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075",
+    "components/camera_snapshots.py": "9150be22b6595d572546c98603cf8a5b289165d3a8443e357dc48045457cc917",
+    "components/switch_manager.py": "3b2bbb29756a3c4bea771bc75a40c657f8dcef32d1753aa94c1d1a1e8a6059e8",
+    "components/camera_admin.py": "a8551d9b44aca774889fc761ac21042239a08d375e4a721bcce68cb7d3e7d4de",
+    "components/camera_activation.py": "6881f697b52578c1f690b0bca14538a3c42c56d9076b80c5c51b5542f2a73e72",
+    "recording.portable.example.json": "19c9db97b879fb7592334acc22add15d380560d18f7eee2c55368e3f76f74cd8",
+    "recording.example.json": "1851ec42626652038c5d325654dd2f8f81c1bfd5ba7981294b13c5813c5273ec",
+    "recording.weather.example.json": "3626721f7473142f5f657d5125649fd7aed0c5c149157279f1b42bc0c8ad321a",
+    "recording.example.ini": "5aea1aa88e966c06163111baad3da472ca0e2ed7e0da3f4136425201185973af"
+  },
+  "integration_fixes": [
+    "Preserved blank v2.4 first-run defaults and previous guards",
+    "No generic registration account is prefilled; factory admin is shown only after status confirmation",
+    "Guarded empty switch camera inventory and activation action dispatch",
+    "Validated camera admin payloads/closed state and cache invalidation lock",
+    "Preserved API result on socket-close race and corrected RSA output width"
+  ]
+}

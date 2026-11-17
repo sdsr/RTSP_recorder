@@ -517,10 +517,30 @@ class RecorderUiController:
         self.cached_revision = None
         self.live_view = LiveViewManager(self.settings)
         self.camera_snapshots = CameraSnapshotManager(self.settings, self.config_path)
-        self.switch_manager = SwitchManager(self.config_path.parent / "switches.json")
+        self.switch_manager = SwitchManager(self.config_path.parent / "switches.json", cameras_provider=self._switch_cameras)
         self.camera_profiles = CameraProfileManager(self)
+        self.camera_admin = CameraAdminManager(self)
+        self.camera_activation = CameraActivationManager(self.config_path)
         self.camera_ping = CameraPingMonitor(self.settings, self.config_path)
         self.shared_browser_server = None
+
+    def _switch_cameras(self):
+        data, _ = self.read_config()
+        if camera_setup_required(data):
+            return []
+        return [{"id": c.name, "name": c.name, "ip": urlsplit(c.url).hostname or ""}
+                for c in self.settings().cameras]
+
+    def activation_action(self, action, data):
+        if action not in ("inspect", "preview", "apply") or not isinstance(data, dict):
+            raise ValueError("카메라 초기 등록 요청 형식이 올바르지 않습니다.")
+        with self.action_lock:
+            if self.closing:
+                raise ValueError("프로그램을 종료하고 있습니다.")
+            if action in ("preview", "apply"):
+                with self.camera_admin._idle():
+                    return getattr(self.camera_activation, action)(data)
+            return getattr(self.camera_activation, action)(data)
 
     def use_recording_profile(self, camera_name, profile, revision):
         if str(profile) not in ("2", "4"):
@@ -1180,6 +1200,9 @@ class RecorderUiController:
     def close(self):
         with self.action_lock:
             self.closing = True
+        self.camera_admin.close()
+        self.camera_activation.close()
+        with self.action_lock:
             self.switch_manager.close()
             self.camera_ping.close()
             self.live_view.close()
@@ -1390,11 +1413,27 @@ def make_ui_handler(controller, token, port):
                 elif self.path == "/api/stop":
                     result = controller.stop()
                 elif self.path == "/api/live/start":
-                    result = controller.live_view.start(data.get("camera"), data.get("profile", "current"))
+                    with controller.action_lock:
+                        result = controller.live_view.start(data.get("camera"), data.get("profile", "current"))
                 elif self.path == "/api/live/stop":
                     result = controller.live_view.stop(data.get("session"))
                 elif self.path == "/api/snapshots/capture":
-                    result = controller.camera_snapshots.capture(data.get("camera"), data.get("profile", "current"))
+                    with controller.action_lock:
+                        result = controller.camera_snapshots.capture(data.get("camera"), data.get("profile", "current"))
+                elif self.path == "/api/camera-admin/inspect":
+                    result = controller.camera_admin.inspect(data)
+                elif self.path == "/api/camera-admin/plan":
+                    result = controller.camera_admin.plan(data)
+                elif self.path == "/api/camera-admin/apply":
+                    result = controller.camera_admin.apply(data)
+                elif self.path == "/api/camera-admin/register":
+                    result = controller.camera_admin.register(data)
+                elif self.path == "/api/camera-activation/inspect":
+                    result = controller.activation_action("inspect", data)
+                elif self.path == "/api/camera-activation/plan":
+                    result = controller.activation_action("preview", data)
+                elif self.path == "/api/camera-activation/apply":
+                    result = controller.activation_action("apply", data)
                 elif self.path == "/api/switch/config":
                     result = controller.switch_manager.save_connection(data)
                 elif self.path == "/api/switch/inspect":
