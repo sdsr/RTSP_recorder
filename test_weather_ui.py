@@ -46,6 +46,7 @@ class Fixture(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         self.weather = record.default_weather_config()
         self.weather["enabled"] = True
+        self.weather["region"] = {"sido": "부산광역시", "sigungu": "해운대구", "eupmyeondong": ""}
         self.weather["provider"] = "data_go_kr"
         self.condition = record.parse_weather_condition(self.weather, self.root)
         self.data = {"output_dir": str(self.root / "captures"), "time_ranges": list(record.DEFAULT_TIME_RANGES),

@@ -74,6 +74,7 @@ class Settings:
     recording_dates: tuple = ()
     once_window: tuple = ()
     weather_condition: object = None
+    recording_mode: str = "window"
 
 
 def number(value, label, minimum, maximum, integer=False):
@@ -221,9 +222,11 @@ def read_camera_metadata(ini, section, setup_path, name):
     return metadata
 
 
-def output_pattern(camera, run_dir):
+def output_pattern(camera, run_dir, recording_mode="split"):
     # FFmpeg's numbered filename expansion also interprets % in parent paths.
     prefix = str(Path(run_dir) / (camera_filename_prefix(camera) + "_pending_"))
+    if recording_mode == "window":
+        return prefix + "000000.mp4"
     return prefix.replace("%", "%%") + "%06d.mp4"
 
 
@@ -242,12 +245,12 @@ def load_settings(path):
     return settings_from_data(data, path.parent)
 
 
-def settings_from_data(data, base):
+def settings_from_data(data, base, allow_unconfigured=False):
     base = Path(base).resolve()
     allowed = {"setup_ini", "output_dir", "cameras", "schedules", "ffmpeg",
                "segment_minutes", "segment_seconds", "retention_days", "min_free_gb",
                "reconnect_seconds", "stall_seconds", "intersection_name", "weather",
-               "recording_dates", "time_ranges", "weather_condition"}
+               "recording_dates", "time_ranges", "weather_condition", "recording_mode"}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError("Unknown configuration fields or invalid JSON object")
     intersection_name = config_label(data.get("intersection_name", ""), "intersection_name")
@@ -270,7 +273,7 @@ def settings_from_data(data, base):
     if camera_data == "auto":
         sections = enabled_camera_sections(camera_setup())
         camera_data = [{"name": section.lower(), "section": section} for section in sections]
-    if not isinstance(camera_data, list) or not camera_data:
+    if not isinstance(camera_data, list) or (not camera_data and not allow_unconfigured):
         raise ValueError("cameras must be a nonempty list")
     cameras, names = [], set()
     for item in camera_data:
@@ -344,6 +347,10 @@ def settings_from_data(data, base):
         segment_seconds = number(data["segment_seconds"], "segment_seconds", 1, 86400, True)
     else:
         segment_seconds = minutes_to_seconds(data.get("segment_minutes", 30))
+    recording_mode = data.get("recording_mode",
+                              "split" if "segment_minutes" in data or "segment_seconds" in data else "window")
+    if recording_mode not in ("window", "split"):
+        raise ValueError("recording_mode must be window or split")
     return Settings(
         output, tuple(cameras), tuple(schedules), ffmpeg,
         segment_seconds,
@@ -352,7 +359,7 @@ def settings_from_data(data, base):
         number(data.get("reconnect_seconds", 10), "reconnect_seconds", 1, 3600),
         number(data.get("stall_seconds", 30), "stall_seconds", 5, 3600),
         recording_dates,
-        weather_condition=weather_condition,
+        weather_condition=weather_condition, recording_mode=recording_mode,
     )
 
 
@@ -456,6 +463,7 @@ def standalone_settings(args):
         "cameras": [{"name": section.lower(), "section": section} for section in sections],
         "schedules": schedules,
         "segment_minutes": args.segment_minutes if args.segment_minutes is not None else 30,
+        "recording_mode": getattr(args, "recording_mode", None) or ("split" if args.segment_minutes is not None else "window"),
         "retention_days": args.retention_days if args.retention_days is not None else 0,
         "min_free_gb": args.min_free_gb if args.min_free_gb is not None else 5,
         "ffmpeg": args.ffmpeg if args.ffmpeg is not None else "ffmpeg",
@@ -471,6 +479,8 @@ def service_arguments(args, settings, setup_path):
         result = ["--config", str(Path(args.config).expanduser().resolve())]
         if args.segment_minutes is not None:
             result += ["--segment-minutes", format(args.segment_minutes, ".12g")]
+        if getattr(args, "recording_mode", None) is not None:
+            result += ["--recording-mode", args.recording_mode]
         return result
     result = ["--setup-ini", str(setup_path), "--output-dir", str(settings.output_dir)]
     if args.start_times is not None or args.duration_hours is not None:
@@ -486,7 +496,8 @@ def service_arguments(args, settings, setup_path):
             end_minutes = (schedule.hour * 60 + schedule.minute + int(schedule.duration.total_seconds() / 60)) % 1440
             result.append("{:02d}:{:02d}-{:02d}:{:02d}".format(
                 schedule.hour, schedule.minute, end_minutes // 60, end_minutes % 60))
-    result += ["--segment-minutes", format(settings.segment_seconds / 60, ".12g"),
+    result += ["--recording-mode", settings.recording_mode,
+               "--segment-minutes", format(settings.segment_seconds / 60, ".12g"),
                "--retention-days", str(settings.retention_days),
                "--min-free-gb", format(settings.min_free_gb, ".12g"),
                "--ffmpeg", settings.ffmpeg]
@@ -496,7 +507,7 @@ def service_arguments(args, settings, setup_path):
     return result
 
 
-def active_window(now, schedules, recording_dates=(), day_allowed=None):
+def active_window(now, schedules, recording_dates=(), day_allowed=None, merge_adjacent=True):
     """Merge windows in KST; optional dates select the day each window starts."""
     if now.tzinfo is None:
         raise ValueError("now must have a timezone")
@@ -517,11 +528,23 @@ def active_window(now, schedules, recording_dates=(), day_allowed=None):
             windows.append((start, start + schedule.duration))
     merged = []
     for start, end in sorted(windows):
-        if merged and start <= merged[-1][1]:
+        if merged and (start < merged[-1][1] or (merge_adjacent and start == merged[-1][1])):
             merged[-1] = (merged[-1][0], max(merged[-1][1], end))
         else:
             merged.append((start, end))
     return next((window for window in merged if window[0] <= now < window[1]), None)
+
+
+def select_once_camera(settings, name):
+    """Select one saved camera for this run without rewriting its configuration."""
+    if name is None:
+        return settings
+    if not isinstance(name, str) or not NAME.fullmatch(name):
+        raise ValueError("한 번 녹화할 카메라를 저장된 목록에서 선택하세요.")
+    matches = tuple(camera for camera in settings.cameras if camera.name == name)
+    if len(matches) != 1:
+        raise ValueError("선택한 카메라가 저장된 목록에 없습니다. 목록을 새로고침하세요.")
+    return replace(settings, cameras=matches)
 
 
 def make_once_window(minutes, start_at=None, now=None):
@@ -545,7 +568,8 @@ def settings_window(now, settings, day_allowed=None):
     if settings.once_window:
         start, end = settings.once_window
         return (start, end) if start <= now < end else None
-    return active_window(now, settings.schedules, settings.recording_dates, day_allowed)
+    return active_window(now, settings.schedules, settings.recording_dates, day_allowed,
+                         merge_adjacent=settings.recording_mode == "split")
 
 
 def log_once_window(window):
@@ -602,17 +626,22 @@ def check_ffmpeg(settings):
 
 def build_command(settings, camera, target, remaining, executable, timeout_option):
     weather_enabled = settings.weather_condition is not None and settings.weather_condition.enabled
-    unlimited = not settings.once_window and not settings.recording_dates and not weather_enabled and continuous_coverage(settings.schedules)
+    unlimited = (settings.recording_mode == "split" and not settings.once_window
+                 and not settings.recording_dates and not weather_enabled and continuous_coverage(settings.schedules))
     duration_args = [] if unlimited else ["-t", "{:.3f}".format(remaining)]
+    # Write MP4 initialization metadata first and fragment at keyframes so a
+    # process/network interruption does not leave a traditional unfinalized MP4.
+    flags = "+frag_keyframe+empty_moov+default_base_moof"
+    if settings.recording_mode == "window":
+        muxer_args = ["-f", "mp4", "-movflags", flags]
+    else:
+        muxer_args = ["-f", "segment", "-segment_format", "mp4",
+                      "-segment_format_options", "movflags=" + flags,
+                      "-segment_time", str(settings.segment_seconds), "-reset_timestamps", "1"]
     return [executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-n",
             "-rtsp_transport", "tcp", timeout_option,
             str(int(settings.stall_seconds * 1000000)), "-i", camera.url,
-            "-map", "0:v:0", "-an", "-c:v", "copy"] + duration_args + [
-            # Each segment is a standalone fragmented MP4. Write initialization
-            # metadata first and fragment at keyframes to tolerate interruption.
-            "-f", "segment", "-segment_format", "mp4",
-            "-segment_format_options", "movflags=+frag_keyframe+empty_moov+default_base_moof",
-            "-segment_time", str(settings.segment_seconds), "-reset_timestamps", "1",
+            "-map", "0:v:0", "-an", "-c:v", "copy"] + duration_args + muxer_args + [
             "-progress", "pipe:1", "-nostats", str(target)]
 
 
@@ -805,10 +834,11 @@ class Recording:
         self.reader = threading.Thread(target=self._read_progress, daemon=True)
         self.reader.start()
         target_name = Path(command[-1]).name
-        suffix = "_pending_%06d.mp4"
-        if target_name.endswith(suffix):
-            self.namer = SegmentNamer(run_dir, target_name[:-len(suffix)])
-            self.namer.start()
+        for suffix in ("_pending_%06d.mp4", "_pending_000000.mp4"):
+            if target_name.endswith(suffix):
+                self.namer = SegmentNamer(run_dir, target_name[:-len(suffix)])
+                self.namer.start()
+                break
 
     def _read_progress(self):
         try:
@@ -877,6 +907,7 @@ class Recorder:
         self.factory = factory
         self.weather_gate = weather_gate
         self.jobs = {}
+        self.job_windows = {}
         self.retry_at = {}
         self.next_storage_check = 0
         self.next_cleanup = 0
@@ -907,6 +938,9 @@ class Recorder:
             code = job.poll()
             if not window or not self.space_ok:
                 reason = "outside schedule" if not window else "low disk space"
+            elif (self.settings.recording_mode == "window" and
+                  name in self.job_windows and now >= self.job_windows[name][1]):
+                reason = "recording window ended"
             elif code is not None:
                 reason = "FFmpeg exited (code {})".format(code)
             elif mono - job.last_progress >= self.settings.stall_seconds:
@@ -915,7 +949,8 @@ class Recorder:
                 continue
             LOG.info("%s: stopped: %s", name, reason)
             stopping.append(self.jobs.pop(name))
-            self.retry_at[name] = mono + self.settings.reconnect_seconds
+            self.job_windows.pop(name, None)
+            self.retry_at[name] = mono if reason == "recording window ended" else mono + self.settings.reconnect_seconds
         stop_recordings(stopping)
 
         if not window or not self.space_ok:
@@ -937,9 +972,10 @@ class Recorder:
                 if self.weather_gate is not None:
                     camera = replace(camera, weather=self.weather_gate.label_for_day(window[0].date()))
                 run_dir = self.storage.create_run(camera, now)
-                command = build_command(self.settings, camera, output_pattern(camera, run_dir),
+                command = build_command(self.settings, camera, output_pattern(camera, run_dir, self.settings.recording_mode),
                                         remaining, self.executable, self.timeout_option)
                 self.jobs[camera.name] = self.factory(command, run_dir)
+                self.job_windows[camera.name] = window
                 LOG.info("%s: recording until %s KST, directory=%s", camera.name,
                          window[1].strftime("%Y-%m-%d %H:%M:%S"), run_dir)
             except (OSError, ValueError):
@@ -949,6 +985,7 @@ class Recorder:
     def close(self):
         stop_recordings(self.jobs.values())
         self.jobs.clear()
+        self.job_windows.clear()
 
 
 SERVICE_NAME = "goomi-camera-recorder.service"
@@ -1134,11 +1171,11 @@ def uninstall_service():
 
 
 INI_FIELDS = ("setup_ini", "cameras", "time_ranges", "start_times", "duration_hours",
-              "segment_minutes", "output_dir", "retention_days", "min_free_gb", "ffmpeg",
+              "segment_minutes", "recording_mode", "output_dir", "retention_days", "min_free_gb", "ffmpeg",
               "reconnect_seconds", "stall_seconds")
 INI_SCHEMA = {
     "CAMERAS": {"setup_ini", "cameras"},
-    "RECORDING": {"time_ranges", "start_times", "duration_hours", "segment_minutes",
+    "RECORDING": {"time_ranges", "start_times", "duration_hours", "segment_minutes", "recording_mode",
                   "output_dir", "retention_days", "min_free_gb", "ffmpeg",
                   "reconnect_seconds", "stall_seconds"},
 }
@@ -1151,7 +1188,7 @@ def default_ini_path():
 def ini_default_options():
     return argparse.Namespace(
         setup_ini=None, cameras=None, time_ranges=list(DEFAULT_TIME_RANGES),
-        start_times=None, duration_hours=None, segment_minutes=30,
+        start_times=None, duration_hours=None, segment_minutes=30, recording_mode="window",
         output_dir=None, retention_days=0, min_free_gb=5, ffmpeg="ffmpeg",
         reconnect_seconds=10, stall_seconds=30,
     )
@@ -1184,6 +1221,8 @@ def validate_ini_options(options):
                for value in options.start_times):
             raise ValueError("start_times must contain HH:MM values (00:00 through 23:59)")
         number(options.duration_hours, "duration_hours", 1 / 3600, 24)
+    if options.recording_mode not in ("window", "split"):
+        raise ValueError("recording_mode must be window or split")
     minutes_to_seconds(options.segment_minutes)
     number(options.retention_days, "retention_days", 0, 36500, True)
     number(options.min_free_gb, "min_free_gb", 0, 1000000)
@@ -1218,6 +1257,7 @@ def ini_options(path):
     result = ini_default_options()
     camera = parser["CAMERAS"]
     recording = parser["RECORDING"]
+    result.recording_mode = recording.get("recording_mode", "split" if "segment_minutes" in recording else "window").strip()
     for key in ("setup_ini", "output_dir"):
         values = camera if key == "setup_ini" else recording
         value = values.get(key, "auto").strip()
@@ -1273,6 +1313,9 @@ def merge_ini_overrides(base, overrides=None):
             result.start_times = starts
         if duration is not None:
             result.duration_hours = duration
+    if (getattr(overrides, "segment_minutes", None) is not None
+            and getattr(overrides, "recording_mode", None) is None):
+        result.recording_mode = "split"
     for field in INI_FIELDS:
         if field in ("time_ranges", "start_times", "duration_hours"):
             continue
@@ -1313,7 +1356,9 @@ def render_ini_config(overrides=None):
         "; 한국 시간 기준 매일 녹화 구간. 쉼표로 구분합니다. 자정 통과 가능.",
         "; 예: 06:30-07:30, 10:00-11:00, 12:00-13:00, 17:00-18:00, 21:00-22:00",
         *schedule_lines,
-        "; MP4 파일 분할 간격(분): 30 또는 60 등",
+        "; window: 예약 구간 전체를 한 파일로 저장. split: 아래 간격으로 분할.",
+        "recording_mode = " + options.recording_mode,
+        "; split일 때만 사용하는 MP4 파일 분할 간격(분)",
         "segment_minutes = " + str(options.segment_minutes),
         "; auto: setup.ini가 속한 프로젝트의 runtime/scheduled_recordings",
         "output_dir = " + (str(options.output_dir) if options.output_dir is not None else "auto"),
@@ -1330,22 +1375,23 @@ def render_ini_config(overrides=None):
 
 def render_json_config(overrides=None):
     options = merge_ini_overrides(ini_default_options(), overrides)
+    use_setup = options.setup_ini is not None or options.cameras is not None
     data = {
         "setup_ini": str(options.setup_ini) if options.setup_ini is not None else "auto",
-        "output_dir": str(options.output_dir) if options.output_dir is not None else "auto",
+        "output_dir": str(options.output_dir) if options.output_dir is not None else ("auto" if use_setup else "./recordings"),
         "intersection_name": "",
         "weather": "",
         "recording_dates": [],
         "weather_condition": default_weather_config(),
         "cameras": ([{"name": section.lower(), "section": section} for section in options.cameras]
-                    if options.cameras is not None else "auto"),
+                    if options.cameras is not None else ("auto" if use_setup else [])),
     }
     if options.time_ranges is not None:
         data["time_ranges"] = options.time_ranges
     else:
         data["schedules"] = [{"start": start, "duration_hours": options.duration_hours}
                              for start in options.start_times]
-    for key in ("segment_minutes", "retention_days", "min_free_gb", "ffmpeg",
+    for key in ("recording_mode", "segment_minutes", "retention_days", "min_free_gb", "ffmpeg",
                 "reconnect_seconds", "stall_seconds"):
         data[key] = getattr(options, key)
     return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
@@ -2120,326 +2166,427 @@ EMBEDDED_REGIONS = (
 )
 
 EMBEDDED_UI = (
-    "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"
+    "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"
 )
 # END EMBEDDED ASSETS
 
@@ -2504,7 +2651,7 @@ class WeatherCondition:
 
 
 def default_weather_config():
-    return {"enabled": False, "region": {"sido": "부산광역시", "sigungu": "해운대구", "eupmyeondong": ""},
+    return {"enabled": False, "region": {"sido": "", "sigungu": "", "eupmyeondong": ""},
             "conditions": ["rain"], "provider": "open_meteo", "api_key_file": "kma_service.key",
             "poll_minutes": 30, "met_contact": ""}
 
@@ -2547,7 +2694,13 @@ def parse_weather_condition(data, base):
                             latitude, longitude, contact)
 
 
+def validate_weather_region(condition):
+    if condition is None or not any(condition.region) or condition.nx <= 0 or condition.ny <= 0:
+        raise ValueError("날씨 예보를 사용하려면 시간표 · 날씨에서 지역을 먼저 선택하세요.")
+
+
 def validate_weather_access(condition):
+    validate_weather_region(condition)
     if condition.provider == "met_no":
         return met_user_agent(condition)
     if condition.provider == "open_meteo":
@@ -2781,6 +2934,9 @@ class WeatherGate:
     def refresh(self, now=None):
         now = (now or datetime.now(KST)).astimezone(KST)
         try:
+            # Disabled, unconfigured weather is valid as a saved draft, but no
+            # manual/background request may send guessed coordinates such as 0,0.
+            validate_weather_region(self.condition)
             updates = {}
             checked = now
             if self.public_client is not None:
@@ -4367,6 +4523,1375 @@ class CameraPingMonitor:
                     'meaning': 'ICMP ping 응답 이력입니다. ping 실패만으로 RTSP·카메라 전원 장애를 확정할 수 없습니다.'}
 # END EMBEDDED CAMERA_PING
 
+# BEGIN EMBEDDED CAMERA_SNAPSHOTS
+# Embedded after live_view.py. No network access occurs until capture() is called.
+import contextlib as _snap_contextlib
+from datetime import datetime as _snap_datetime, timedelta as _snap_timedelta, timezone as _snap_timezone
+import json as _snap_json
+import os as _snap_os
+from pathlib import Path as _snap_Path
+import re as _snap_re
+import secrets as _snap_secrets
+import shutil as _snap_shutil
+import stat as _snap_stat
+import struct as _snap_struct
+import subprocess as _snap_subprocess
+import sys as _snap_sys
+import threading as _snap_threading
+import time as _snap_time
+import zlib as _snap_zlib
+
+_SNAP_KST = _snap_timezone(_snap_timedelta(hours=9), 'Asia/Seoul')
+_SNAP_MAX_BYTES = 32 * 1024 * 1024
+_SNAP_FFMPEG_CACHE = {}
+_SNAP_FFMPEG_LOCK = _snap_threading.Lock()
+
+
+class CameraSnapshotError(ValueError):
+    """User-facing error: contains no RTSP URL, password or FFmpeg output."""
+
+
+def _snapshot_require_linux():
+    if _snap_sys.platform != 'linux':
+        raise CameraSnapshotError('사진 캡처와 캡처 파일 조회는 Linux ED에서 실행하세요.')
+
+
+def _snapshot_choose_ffmpeg(settings):
+    """Use a decoder-capable executable without changing recording settings.
+
+    Some recorder bundles deliberately contain only RTSP remuxing components.
+    A system FFmpeg can decode their saved camera stream independently. Check
+    local capabilities only; never connect to a camera during this selection.
+    """
+    candidates = [_snap_shutil.which(settings.ffmpeg),
+                  _snap_shutil.which('ffmpeg', path='/usr/bin:/bin'),
+                  _snap_shutil.which('ffmpeg')]
+    seen = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            executable = str(_snap_Path(candidate).resolve())
+            info = _snap_os.stat(executable)
+        except OSError:
+            continue
+        if executable in seen:
+            continue
+        seen.add(executable)
+        key = (executable, info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        with _SNAP_FFMPEG_LOCK:
+            if key not in _SNAP_FFMPEG_CACHE:
+                supported = None
+                try:
+                    capabilities = {}
+                    for option in ('-decoders', '-encoders'):
+                        result = _snap_subprocess.run([executable, '-hide_banner', option],
+                            stdin=_snap_subprocess.DEVNULL, stdout=_snap_subprocess.PIPE,
+                            stderr=_snap_subprocess.DEVNULL, timeout=5, text=True, errors='replace')
+                        if result.returncode:
+                            raise ValueError('unsupported capability command')
+                        capabilities[option] = set(_snap_re.findall(r'^\s*[A-Z.]{6}\s+(\S+)\s',
+                                                                   result.stdout, _snap_re.M))
+                    if {'h264', 'hevc'} <= capabilities['-decoders'] and 'png' in capabilities['-encoders']:
+                        supported = executable
+                except (OSError, ValueError, _snap_subprocess.SubprocessError):
+                    pass
+                if len(_SNAP_FFMPEG_CACHE) >= 16:
+                    _SNAP_FFMPEG_CACHE.clear()
+                _SNAP_FFMPEG_CACHE[key] = supported
+            selected = _SNAP_FFMPEG_CACHE[key]
+        if selected:
+            return selected
+    raise CameraSnapshotError('이미지 캡처에는 H.264·H.265 디코더와 PNG 인코더가 있는 FFmpeg가 필요합니다. '
+        '녹화 전용 FFmpeg는 유지하고 Ubuntu에 일반 FFmpeg를 설치하세요: sudo apt install ffmpeg')
+
+
+def _snapshot_png_info(data):
+    if not isinstance(data, bytes) or not 57 <= len(data) <= _SNAP_MAX_BYTES or data[:8] != b'\x89PNG\r\n\x1a\n':
+        raise CameraSnapshotError('카메라에서 정상 PNG 이미지를 받지 못했습니다.')
+    offset, dimensions, saw_data = 8, None, False
+    while offset + 12 <= len(data):
+        size, kind = _snap_struct.unpack_from('>I4s', data, offset)
+        end = offset + 12 + size
+        if end > len(data):
+            break
+        content = data[offset + 8:offset + 8 + size]
+        crc = _snap_struct.unpack_from('>I', data, offset + 8 + size)[0]
+        if _snap_zlib.crc32(kind + content) & 0xffffffff != crc:
+            break
+        if offset == 8:
+            if kind != b'IHDR' or size != 13:
+                break
+            width, height = _snap_struct.unpack_from('>II', content)
+            if not 0 < width <= 16384 or not 0 < height <= 16384 or width * height > 64_000_000:
+                break
+            dimensions = (width, height)
+        elif kind == b'IHDR':
+            break
+        if kind == b'IDAT':
+            saw_data = True
+        if kind == b'IEND':
+            if size == 0 and end == len(data) and dimensions and saw_data:
+                return dimensions
+            break
+        offset = end
+    raise CameraSnapshotError('캡처 이미지가 불완전합니다. 카메라 연결 상태를 확인하세요.')
+
+
+@_snap_contextlib.contextmanager
+def _snapshot_dir(name, parent_fd=None, create=False):
+    _snapshot_require_linux()
+    if create:
+        try:
+            _snap_os.mkdir(name, 0o700, dir_fd=parent_fd)
+        except FileExistsError:
+            pass
+    fd = _snap_os.open(name, _snap_os.O_RDONLY | _snap_os.O_DIRECTORY | _snap_os.O_NOFOLLOW,
+                       dir_fd=parent_fd)
+    try:
+        yield fd
+    finally:
+        _snap_os.close(fd)
+
+
+def _snapshot_read(dir_fd, filename, maximum):
+    fd = _snap_os.open(filename, _snap_os.O_RDONLY | _snap_os.O_NOFOLLOW | _snap_os.O_NONBLOCK,
+                       dir_fd=dir_fd)
+    with _snap_os.fdopen(fd, 'rb') as stream:
+        info = _snap_os.fstat(stream.fileno())
+        if not _snap_stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= maximum:
+            raise CameraSnapshotError('캡처 파일 형식 또는 크기가 올바르지 않습니다.')
+        data = stream.read(maximum + 1)
+    if len(data) > maximum:
+        raise CameraSnapshotError('캡처 파일이 허용 크기를 초과했습니다.')
+    return data
+
+
+def _snapshot_write(dir_fd, name, data):
+    """Publish a complete new file; never follow or overwrite an existing name."""
+    temporary = '.snapshot-' + _snap_secrets.token_hex(16) + '.partial'
+    fd = _snap_os.open(temporary, _snap_os.O_WRONLY | _snap_os.O_CREAT | _snap_os.O_EXCL |
+                       _snap_os.O_NOFOLLOW, 0o600, dir_fd=dir_fd)
+    try:
+        with _snap_os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            _snap_os.fsync(stream.fileno())
+        _snap_os.link(temporary, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd,
+                      follow_symlinks=False)
+    finally:
+        _snap_os.unlink(temporary, dir_fd=dir_fd)
+
+
+class CameraSnapshotManager:
+    """One bounded, explicit capture at a time, independent of live playback.
+
+    capture() and list() return JSON-safe metadata. media(id) returns
+    (metadata, PNG bytes); the HTTP layer supplies authenticated URLs. The saved
+    recording profile is used by default. No camera settings are changed.
+    """
+    CAPTURE_TIMEOUT = 25.0
+    MAX_LIST_SCAN = 10000
+
+    def __init__(self, settings_provider, config_path):
+        self._settings = settings_provider
+        self._parent = _snap_Path(config_path).expanduser().resolve().parent
+        self._capture_lock = _snap_threading.Lock()
+        self._state_lock = _snap_threading.RLock()
+        self._closed = False
+        self._process = None
+        self._index = {}
+
+    @_snap_contextlib.contextmanager
+    def _root(self, create=False):
+        with _snapshot_dir(str(self._parent)) as parent:
+            with _snapshot_dir('snapshots', parent, create) as root:
+                yield root
+
+    @staticmethod
+    def _stop_process(process):
+        if process is None:
+            return
+        try:
+            if process.poll() is None:
+                process.terminate()
+            try:
+                process.wait(timeout=1)
+            except _snap_subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=1)
+        except (OSError, _snap_subprocess.SubprocessError):
+            pass
+
+    def _capture_bytes(self, command, input_data=None, deadline=None):
+        if input_data is not None and (not isinstance(input_data, bytes) or len(input_data) > _SNAP_MAX_BYTES):
+            raise CameraSnapshotError('이미지 변환 입력이 허용 크기를 초과했습니다.')
+        deadline = deadline if deadline is not None else _snap_time.monotonic() + self.CAPTURE_TIMEOUT
+        if deadline <= _snap_time.monotonic():
+            raise CameraSnapshotError('이미지 캡처 제한 시간을 초과했습니다.')
+        result, done = {}, _snap_threading.Event()
+        with self._state_lock:
+            if self._closed:
+                raise CameraSnapshotError('이미지 캡처 서비스가 종료되었습니다.')
+            try:
+                process = _snap_subprocess.Popen(command,
+                    stdin=_snap_subprocess.PIPE if input_data is not None else _snap_subprocess.DEVNULL,
+                    stdout=_snap_subprocess.PIPE, stderr=_snap_subprocess.DEVNULL,
+                    close_fds=True, bufsize=0)
+            except (OSError, ValueError):
+                raise CameraSnapshotError('이미지 캡처용 FFmpeg를 실행할 수 없습니다.') from None
+            self._process = process
+
+        def read_image():
+            image = bytearray()
+            try:
+                while len(image) <= _SNAP_MAX_BYTES:
+                    chunk = process.stdout.read(min(64 * 1024, _SNAP_MAX_BYTES + 1 - len(image)))
+                    if not chunk:
+                        result['data'] = bytes(image)
+                        break
+                    image.extend(chunk)
+                else:
+                    result['oversized'] = True
+            except (OSError, ValueError):
+                result['read_failed'] = True
+            finally:
+                done.set()
+
+        def write_input():
+            try:
+                view = memoryview(input_data)
+                while view:
+                    written = process.stdin.write(view[:64 * 1024])
+                    if not written:
+                        break
+                    view = view[written:]
+            except (OSError, ValueError):
+                # FFmpeg may finish the selected frame before consuming the
+                # container's trailing index. Its exit code determines success.
+                pass
+            finally:
+                try:
+                    process.stdin.close()
+                except (OSError, ValueError):
+                    pass
+
+        reader = _snap_threading.Thread(target=read_image, daemon=True, name='camera-snapshot-output')
+        reader.start()
+        writer = None
+        if input_data is not None:
+            writer = _snap_threading.Thread(target=write_input, daemon=True, name='camera-snapshot-input')
+            writer.start()
+        try:
+            if not done.wait(max(0, deadline - _snap_time.monotonic())):
+                raise CameraSnapshotError('제한 시간 안에 이미지를 받지 못했습니다. 연결 상태·프로파일·계정을 확인하세요.')
+            if result.get('oversized'):
+                raise CameraSnapshotError('이미지가 32 MiB를 초과해 저장하지 않았습니다.')
+            try:
+                status = process.wait(timeout=max(0.01, deadline - _snap_time.monotonic()))
+            except _snap_subprocess.TimeoutExpired:
+                raise CameraSnapshotError('이미지 캡처 제한 시간을 초과했습니다.') from None
+            with self._state_lock:
+                if self._closed:
+                    raise CameraSnapshotError('이미지 캡처가 중지되었습니다.')
+            if status != 0 or result.get('read_failed'):
+                raise CameraSnapshotError('이미지 캡처에 실패했습니다. 카메라 연결·계정·프로파일을 확인하세요. 자동 재시도하지 않습니다.')
+            data = result.get('data', b'')
+            if not data:
+                raise CameraSnapshotError('카메라 이미지 데이터를 받지 못했습니다.')
+            return data
+        finally:
+            self._stop_process(process)
+            reader.join(timeout=1)
+            if writer is not None:
+                writer.join(timeout=1)
+                try:
+                    process.stdin.close()
+                except (OSError, ValueError):
+                    pass
+            if process.stdout:
+                process.stdout.close()
+            with self._state_lock:
+                if self._process is process:
+                    self._process = None
+
+    def _capture_png(self, command, input_data=None, deadline=None):
+        data = self._capture_bytes(command, input_data, deadline)
+        _snapshot_png_info(data)
+        return data
+
+    def capture(self, camera_name, profile='current'):
+        _snapshot_require_linux()
+        if not isinstance(camera_name, str) or not _snap_re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', camera_name):
+            raise CameraSnapshotError('저장된 카메라를 선택하세요.')
+        if not self._capture_lock.acquire(blocking=False):
+            raise CameraSnapshotError('다른 이미지 캡처가 진행 중입니다. 완료 후 다시 시도하세요.')
+        try:
+            with self._state_lock:
+                if self._closed:
+                    raise CameraSnapshotError('이미지 캡처 서비스가 종료되었습니다.')
+            settings = self._settings()
+            cameras = [camera for camera in settings.cameras if camera.name == camera_name]
+            if len(cameras) != 1:
+                raise CameraSnapshotError('저장된 카메라를 선택하세요.')
+            camera = cameras[0]
+            try:
+                url = live_view_url(camera, profile)
+                info = live_view_camera_info(camera)
+                executable, timeout_option = check_ffmpeg(settings)
+            except (ValueError, OSError, _snap_subprocess.SubprocessError):
+                raise CameraSnapshotError('저장된 RTSP 주소·프로파일 또는 녹화용 FFmpeg 설정을 확인하세요.') from None
+            decoder = _snapshot_choose_ffmpeg(settings)
+            with self._root(create=True) as root:
+                space = _snap_os.fstatvfs(root)
+                reserve = max(256 * 1024 * 1024, float(getattr(settings, 'min_free_gb', 5)) * 1024 ** 3)
+                if space.f_bavail * space.f_frsize < reserve + _SNAP_MAX_BYTES:
+                    raise CameraSnapshotError('저장 공간이 부족합니다. 녹화용 여유 공간을 확보한 후 다시 시도하세요.')
+            # Only the configured recorder executable authenticates with the
+            # camera. An older system decoder may not support its RTSP digest.
+            network_command = [executable, '-hide_banner', '-loglevel', 'error', '-nostdin',
+                '-rtsp_transport', 'tcp', timeout_option, '10000000', '-i', url,
+                '-map', '0:v:0', '-an', '-sn', '-dn', '-frames:v', '1', '-c:v', 'copy',
+                '-f', 'mp4', '-movflags', '+frag_keyframe+empty_moov+default_base_moof', 'pipe:1']
+            decode_command = [decoder, '-hide_banner', '-loglevel', 'error', '-nostdin',
+                '-i', 'pipe:0', '-map', '0:v:0', '-an', '-sn', '-dn', '-frames:v', '1', '-c:v', 'png',
+                '-threads', '1', '-f', 'image2pipe', 'pipe:1']
+            deadline = _snap_time.monotonic() + self.CAPTURE_TIMEOUT
+            frame = self._capture_bytes(network_command, deadline=deadline)
+            data = self._capture_png(decode_command, input_data=frame, deadline=deadline)
+            width, height = _snapshot_png_info(data)
+            now = _snap_datetime.now(_SNAP_KST)
+            identifier = _snap_secrets.token_hex(16)
+            day = now.strftime('%Y-%m-%d')
+            safe_ip = _snap_re.sub(r'[^A-Za-z0-9_.-]', '_', info['ip'] or 'unknown')[:100]
+            filename = '{}_ip{}_{}_KST_{}.png'.format(camera_name, safe_ip,
+                now.strftime('%Y%m%d_%H%M%S'), identifier)
+            metadata = {'id': identifier, 'camera': camera_name, 'ip': info['ip'],
+                'profile': info['profile'] if profile == 'current' else profile,
+                'captured_at': now.isoformat(timespec='seconds'), 'filename': filename,
+                'width': width, 'height': height, 'size': len(data), 'mime': 'image/png'}
+            meta_name = identifier + '.json'
+            with self._root(create=True) as root:
+                with _snapshot_dir(camera_name, root, True) as cam:
+                    with _snapshot_dir(day, cam, True) as target:
+                        _snapshot_write(target, filename, data)
+                        try:
+                            _snapshot_write(target, meta_name,
+                                _snap_json.dumps(metadata, ensure_ascii=False).encode('utf-8'))
+                        except Exception:
+                            # The complete PNG has been published. Preserve it
+                            # (and any concurrent replacement) if its index fails.
+                            # Removing by pathname here could delete another file.
+                            raise CameraSnapshotError('사진은 저장했지만 캡처 목록을 기록하지 못했습니다. '
+                                '설정 폴더 아래 snapshots의 PNG 파일과 저장 공간을 확인하세요.') from None
+            with self._state_lock:
+                self._index[identifier] = (camera_name, day)
+            return metadata
+        except (OSError, NotImplementedError):
+            raise CameraSnapshotError('캡처 저장 폴더를 안전하게 열거나 쓸 수 없습니다. 권한·링크·저장 공간을 확인하세요.') from None
+        finally:
+            self._capture_lock.release()
+
+    @staticmethod
+    def _metadata(target, identifier, camera, day):
+        metadata = _snap_json.loads(_snapshot_read(target, identifier + '.json', 16384))
+        required = {'id', 'camera', 'ip', 'profile', 'captured_at', 'filename', 'width', 'height', 'size', 'mime'}
+        if (not isinstance(metadata, dict) or set(metadata) != required or metadata['id'] != identifier
+                or metadata['camera'] != camera or metadata['mime'] != 'image/png'
+                or not isinstance(metadata['filename'], str)
+                or not _snap_re.fullmatch(r'[A-Za-z0-9_.-]{1,240}', metadata['filename'])
+                or not metadata['filename'].endswith('_' + identifier + '.png')
+                or not isinstance(metadata['captured_at'], str) or not metadata['captured_at'].startswith(day + 'T')
+                or not isinstance(metadata['ip'], str) or len(metadata['ip']) > 253
+                or not isinstance(metadata['profile'], str) or len(metadata['profile']) > 32
+                or any(type(metadata[key]) is not int or metadata[key] <= 0 for key in ('width', 'height', 'size'))
+                or metadata['size'] > _SNAP_MAX_BYTES):
+            raise CameraSnapshotError('캡처 목록 정보가 올바르지 않습니다.')
+        return metadata
+
+    def _scan(self):
+        found = []
+        count = 0
+        try:
+            with self._root() as root:
+                for camera in sorted(_snap_os.listdir(root))[:256]:
+                    if not _snap_re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', camera):
+                        continue
+                    try:
+                        with _snapshot_dir(camera, root) as cam:
+                            for day in sorted(_snap_os.listdir(cam), reverse=True)[:3660]:
+                                if not _snap_re.fullmatch(r'\d{4}-\d{2}-\d{2}', day):
+                                    continue
+                                try:
+                                    with _snapshot_dir(day, cam) as target:
+                                        for name in sorted(_snap_os.listdir(target), reverse=True):
+                                            if not _snap_re.fullmatch(r'[0-9a-f]{32}\.json', name):
+                                                continue
+                                            count += 1
+                                            if count > self.MAX_LIST_SCAN:
+                                                return found
+                                            try:
+                                                meta = self._metadata(target, name[:-5], camera, day)
+                                                info = _snap_os.stat(meta['filename'], dir_fd=target, follow_symlinks=False)
+                                                if not _snap_stat.S_ISREG(info.st_mode) or info.st_size != meta['size']:
+                                                    continue
+                                                found.append(meta)
+                                                with self._state_lock:
+                                                    self._index[meta['id']] = (camera, day)
+                                            except (OSError, ValueError, TypeError, KeyError):
+                                                continue
+                                except OSError:
+                                    continue
+                    except OSError:
+                        continue
+        except FileNotFoundError:
+            pass
+        except (OSError, NotImplementedError):
+            raise CameraSnapshotError('캡처 저장 폴더에 접근할 수 없습니다.') from None
+        return found
+
+    def list(self, limit=100):
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise CameraSnapshotError('캡처 목록 개수는 1~1,000개로 지정하세요.')
+        return sorted(self._scan(), key=lambda item: (item['captured_at'], item['id']), reverse=True)[:limit]
+
+    def media(self, identifier):
+        if not isinstance(identifier, str) or not _snap_re.fullmatch(r'[0-9a-f]{32}', identifier):
+            raise CameraSnapshotError('캡처 이미지를 찾을 수 없습니다.')
+        with self._state_lock:
+            location = self._index.get(identifier)
+        if location is None:
+            self._scan()
+            with self._state_lock:
+                location = self._index.get(identifier)
+        if location is None:
+            raise CameraSnapshotError('캡처 이미지를 찾을 수 없습니다.')
+        camera, day = location
+        try:
+            with self._root() as root:
+                with _snapshot_dir(camera, root) as cam:
+                    with _snapshot_dir(day, cam) as target:
+                        metadata = self._metadata(target, identifier, camera, day)
+                        data = _snapshot_read(target, metadata['filename'], _SNAP_MAX_BYTES)
+            if len(data) != metadata['size'] or _snapshot_png_info(data) != (metadata['width'], metadata['height']):
+                raise CameraSnapshotError('저장된 캡처 이미지가 변경되었거나 불완전합니다.')
+            return metadata, data
+        except (OSError, ValueError, TypeError, KeyError, NotImplementedError):
+            raise CameraSnapshotError('캡처 이미지를 안전하게 읽을 수 없습니다.') from None
+
+    def close(self):
+        with self._state_lock:
+            self._closed = True
+            process = self._process
+        self._stop_process(process)
+# END EMBEDDED CAMERA_SNAPSHOTS
+
+# BEGIN EMBEDDED SWITCH_MANAGER
+# Embedded before ui_server.py. No I/O, credentials, defaults or network writes on import.
+import datetime as _sm_datetime
+import hashlib as _sm_hashlib
+import ipaddress as _sm_ipaddress
+import json as _sm_json
+import os as _sm_os
+from pathlib import Path as _sm_Path
+import re as _sm_re
+import secrets as _sm_secrets
+import shutil as _sm_shutil
+import socket as _sm_socket
+import subprocess as _sm_subprocess
+import threading as _sm_threading
+import time as _sm_time
+
+
+class SwitchManagerError(ValueError):
+    pass
+
+
+class _SwitchConnectionError(SwitchManagerError):
+    pass
+
+
+_SM_MODEL = 'POE9728MDTL2'
+_SM_FIRMWARE = 'V200SP10241024'
+_SM_MAC = r'(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}'
+_SM_PROMPT = rb'(?:^|[\r\n])[ \t]*([A-Za-z0-9_.:/-]{1,100})(?:\([^\r\n]*\))?[>#][ \t]*$'
+
+
+def _sm_clean(value):
+    if isinstance(value, bytes):
+        value = value.decode('utf-8', 'replace')
+    value = _sm_re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', value)
+    value = _sm_re.sub(r'--\s*More\s*--[ \t\x08]*', '', value, flags=_sm_re.I)
+    return value.replace('\x08', '').replace('\r', '')
+
+
+def _sm_redact(value):
+    return '\n'.join('[인증 설정 생략]' if _sm_re.search(
+        r'password|passwd|secret|community|username|authentication|radius|tacacs|authorization', line, _sm_re.I)
+        else line for line in _sm_clean(str(value)).splitlines())
+
+
+def _sm_mac(value):
+    if not isinstance(value, str) or not _sm_re.fullmatch(_SM_MAC, value):
+        raise SwitchManagerError('CPU MAC 주소는 84:E5:D8:E1:72:42 형식으로 입력하세요.')
+    return value.lower().replace('-', ':')
+
+
+def _sm_ip(value):
+    try:
+        ip = _sm_ipaddress.IPv4Address(str(value))
+    except ValueError:
+        raise SwitchManagerError('유효한 IPv4 주소를 입력하세요.') from None
+    if ip.is_unspecified or ip.is_loopback or ip.is_multicast or int(ip) == 0xffffffff:
+        raise SwitchManagerError('장비의 실제 IPv4 주소를 입력하세요.')
+    return str(ip)
+
+
+def _sm_int(value, low, high, label):
+    if isinstance(value, bool) or not _sm_re.fullmatch(r'[0-9]+', str(value)):
+        raise SwitchManagerError(label + ' 값이 올바르지 않습니다.')
+    value = int(value)
+    if not low <= value <= high:
+        raise SwitchManagerError('{} 범위는 {}~{}입니다.'.format(label, low, high))
+    return value
+
+
+def _sm_identity(raw):
+    expressions = {'model': r'Device:\s*([^,\s]+)',
+                   'cpu_mac': r'CPU MAC\s+(' + _SM_MAC + ')',
+                   'firmware': r'SoftWare Version\s+(\S+)',
+                   'serial': r'Serial Num:\s*(\S+)'}
+    result = {}
+    for key, expression in expressions.items():
+        match = _sm_re.search(expression, _sm_clean(raw), _sm_re.I)
+        result[key] = match.group(1) if match else None
+    if result['cpu_mac']:
+        result['cpu_mac'] = _sm_mac(result['cpu_mac'])
+    return result
+
+
+def _sm_config_text(raw):
+    rows = _sm_clean(raw).splitlines()
+    start = next((i for i, line in enumerate(rows) if line.strip() == '!'), None)
+    end = next((i for i, line in enumerate(rows) if line.strip() == 'end' and start is not None and i > start), None)
+    if start is None or end is None:
+        raise SwitchManagerError('허브 설정 본문을 해석하지 못했습니다. 변경하지 않습니다.')
+    return '\n'.join(line.rstrip() for line in rows[start:end + 1]) + '\n'
+
+
+def _sm_comparable(raw):
+    return '\n'.join(line.strip() for line in _sm_config_text(raw).splitlines()
+                     if line.strip() and line.strip() != '!')
+
+
+def _sm_sections(raw):
+    result, current = {}, None
+    for line in _sm_config_text(raw).splitlines():
+        row = line.strip()
+        match = _sm_re.fullmatch(r'interface\s+(\S+)', row, _sm_re.I)
+        if match:
+            current = match.group(1).lower()
+            result[current] = []
+        elif row in ('!', 'end'):
+            current = None
+        elif current:
+            result[current].append(row)
+    return result
+
+
+def _sm_unowned_config(raw, plan):
+    """Settings outside this transaction must not change or be saved implicitly."""
+    owned = ('ethernet1/0/' + str(plan['before']['port']) if plan['action'] in ('port', 'vlan')
+             else 'vlan' + str(plan['before']['vlan']))
+    result, section = [], None
+    for line in _sm_config_text(raw).splitlines():
+        row = line.strip()
+        match = _sm_re.fullmatch(r'interface\s+(\S+)', row, _sm_re.I)
+        if match:
+            section = match.group(1).lower()
+        elif row in ('!', 'end'):
+            section = None
+        if row == '!' or not row:
+            continue
+        if section == owned:
+            if plan['action'] == 'port' and row in ('shutdown', 'no shutdown'):
+                continue
+            if plan['action'] == 'vlan' and _sm_re.fullmatch(r'switchport access vlan \d+', row):
+                continue
+            if plan['action'] == 'management' and row.startswith('ip address '):
+                continue
+        if plan['action'] == 'management' and _sm_re.fullmatch(
+                r'ip route (?:0\.0\.0\.0/0|0\.0\.0\.0 0\.0\.0\.0) [0-9.]+', row):
+            continue
+        result.append(row)
+    return result
+
+
+def _sm_cli_error(raw):
+    pattern = _sm_re.compile(r"^\s*(?:%\s*)?(?:Invalid(?:\s|:)|Unrecognized(?:\s|:)|Unknown command\b|"
+                             r"Incomplete(?:\s|:)|Ambiguous(?:\s|:)|Error(?:\s|[:,])|Failed(?:\s+to\b|:)|"
+                             r"Cann?'t\b|Cannot\b|Permission denied\b|Access denied\b|Command rejected\b)", _sm_re.I)
+    for row in _sm_clean(raw).splitlines():
+        if _sm_re.fullmatch(r'\s*Failed\s*:\s*\d+\s*', row, _sm_re.I):
+            continue
+        if pattern.search(row) or _sm_re.search(r'^\s*(?:Write|Save|Saving|Command|Operation)\b.*\bfailed\b', row, _sm_re.I):
+            return _sm_redact(row)
+    return None
+
+
+def _sm_private_write(path, value):
+    path = _sm_Path(path)
+    flags = _sm_os.O_WRONLY | _sm_os.O_CREAT | _sm_os.O_EXCL | getattr(_sm_os, 'O_NOFOLLOW', 0)
+    fd = _sm_os.open(str(path), flags, 0o600)
+    with _sm_os.fdopen(fd, 'w', encoding='utf-8') as handle:
+        handle.write(value)
+        handle.flush()
+        _sm_os.fsync(handle.fileno())
+
+
+def _sm_ip_json(*args):
+    try:
+        result = _sm_subprocess.run(['ip', '-j'] + list(args), capture_output=True, text=True, timeout=8, check=True)
+        return _sm_json.loads(result.stdout)
+    except (OSError, ValueError, _sm_subprocess.SubprocessError):
+        raise SwitchManagerError('Linux ip 명령으로 카메라 NIC 경로를 확인하지 못했습니다.') from None
+
+
+def _sm_route(connection, target=None, source=None):
+    target, source = target or connection['target'], source or connection['source']
+    interface = connection['interface']
+    links = _sm_ip_json('-d', 'link', 'show')
+    by_name = {row['ifname'].split('@')[0]: row for row in links}
+    by_index = {row['ifindex']: row for row in links}
+    current, visited = by_name.get(interface), set()
+    if current is None:
+        raise SwitchManagerError('지정한 관리 인터페이스가 없습니다. enp2 또는 그 VLAN 인터페이스를 지정하세요.')
+    nic = current
+    while not _sm_re.fullmatch(r'enp2[0-9A-Za-z]*', current.get('ifname', '')):
+        if current['ifindex'] in visited or current.get('linkinfo', {}).get('info_kind') != 'vlan':
+            raise SwitchManagerError('관리 접속은 enp2 카메라 NIC 및 그 VLAN 인터페이스에서만 허용합니다. enp3/LTE는 보호됩니다.')
+        visited.add(current['ifindex'])
+        parent = current.get('link')
+        current = by_name.get(parent) if isinstance(parent, str) else by_index.get(current.get('link_index', parent))
+        if current is None:
+            raise SwitchManagerError('VLAN 인터페이스의 enp2 부모를 확인하지 못했습니다.')
+    addresses = _sm_ip_json('address', 'show', 'dev', interface)
+    if len(addresses) != 1 or source not in [row.get('local') for row in addresses[0].get('addr_info', []) if row.get('family') == 'inet']:
+        raise SwitchManagerError('지정한 소스 IP가 관리 NIC에 없습니다. 이 화면은 PC IP·Netplan을 변경하지 않습니다.')
+    routes = _sm_ip_json('-4', 'route', 'get', target, 'from', source)
+    if len(routes) != 1 or routes[0].get('dev') != interface or routes[0].get('gateway') or routes[0].get('type') in ('local', 'unreachable', 'blackhole', 'prohibit'):
+        raise SwitchManagerError('허브로 가는 직접 enp2 경로가 없습니다. LTE 기본 경로를 사용하지 않습니다.')
+    if target == source:
+        raise SwitchManagerError('허브 주소와 ED 소스 주소는 달라야 합니다.')
+    return {'dev': interface, 'source': source, 'parent': current['ifname'], 'local_mac': _sm_mac(nic['address'])}
+
+
+def _sm_no_collision(connection, target):
+    if target == connection['target']:
+        return
+    binary = _sm_shutil.which('arping')
+    if not binary:
+        raise SwitchManagerError('새 관리 IP 중복 검사에 arping이 필요합니다. Ubuntu: sudo apt install iputils-arping')
+    try:
+        completed = _sm_subprocess.run([binary, '-D', '-I', connection['interface'], '-c', '3', '-w', '5', target],
+                                       capture_output=True, text=True, timeout=8)
+    except (OSError, _sm_subprocess.SubprocessError):
+        raise SwitchManagerError('새 관리 IP 중복 검사를 완료하지 못했습니다. 변경하지 않습니다.') from None
+    # iputils arping -D succeeds only when no duplicate replied; errors also reject.
+    if completed.returncode != 0:
+        raise SwitchManagerError('새 관리 IP에 응답이 있거나 중복 검사 권한이 없습니다. 주소 충돌 여부를 확인하세요.')
+
+
+class _SwitchTelnet:
+    """Small Telnet reader, avoiding Python 3.13's removed telnetlib dependency."""
+    def __init__(self, sock):
+        self.sock, self.buffer, self.state, self.option = sock, b'', 'data', None
+
+    def write(self, data):
+        self.sock.sendall(data.replace(b'\xff', b'\xff\xff'))
+
+    def _feed(self, raw):
+        output = bytearray()
+        for value in raw:
+            if self.state == 'data':
+                if value == 255:
+                    self.state = 'iac'
+                else:
+                    output.append(value)
+            elif self.state == 'iac':
+                if value == 255:
+                    output.append(value)
+                    self.state = 'data'
+                elif value in (251, 252, 253, 254):
+                    self.option, self.state = value, 'option'
+                elif value == 250:
+                    self.state = 'sub'
+                else:
+                    self.state = 'data'
+            elif self.state == 'option':
+                if self.option == 251:
+                    self.sock.sendall(bytes((255, 253 if value in (1, 3) else 254, value)))
+                elif self.option == 253:
+                    self.sock.sendall(bytes((255, 252, value)))
+                self.state = 'data'
+            elif self.state == 'sub' and value == 255:
+                self.state = 'sub_iac'
+            elif self.state == 'sub_iac':
+                self.state = 'data' if value == 240 else 'sub'
+        self.buffer += bytes(output)
+
+    def expect(self, patterns, timeout):
+        deadline = _sm_time.monotonic() + timeout
+        while True:
+            for index, pattern in enumerate(patterns):
+                match = _sm_re.search(pattern, self.buffer)
+                if match:
+                    data, self.buffer = self.buffer[:match.end()], self.buffer[match.end():]
+                    return index, match, data
+            if len(self.buffer) > 4_000_000:
+                raise SwitchManagerError('허브 응답 크기 제한을 초과했습니다.')
+            remaining = deadline - _sm_time.monotonic()
+            if remaining <= 0:
+                data, self.buffer = self.buffer, b''
+                return -1, None, data
+            self.sock.settimeout(min(remaining, 1))
+            try:
+                data = self.sock.recv(65536)
+            except _sm_socket.timeout:
+                continue
+            if not data:
+                raise _SwitchConnectionError('허브 관리 연결이 끊겼습니다.')
+            self._feed(data)
+
+    def close(self):
+        self.sock.close()
+
+
+class _SwitchCLI:
+    def __init__(self, connection, password):
+        self.connection, self.password = connection, password
+        self.transport, self.prompt = None, None
+
+    def __enter__(self):
+        _sm_route(self.connection)
+        sock = _sm_socket.socket()
+        try:
+            sock.settimeout(6)
+            # Binding the explicit local address plus a checked direct route works
+            # without root; SO_BINDTODEVICE is additionally used where permitted.
+            try:
+                sock.setsockopt(_sm_socket.SOL_SOCKET, _sm_socket.SO_BINDTODEVICE,
+                                (self.connection['interface'] + '\0').encode())
+            except (AttributeError, PermissionError):
+                pass
+            sock.bind((self.connection['source'], 0))
+            sock.connect((self.connection['target'], 23))
+            self.transport = _SwitchTelnet(sock)
+            patterns = [rb'(?i)(?:username|login):\s*$', rb'(?i)password:\s*$', _SM_PROMPT]
+            n, _, _ = self.transport.expect(patterns, 7)
+            if n != 0:
+                raise SwitchManagerError('지원하는 허브 로그인 화면이 아닙니다.')
+            self.transport.write(self.connection['username'].encode() + b'\r\n')
+            n, _, _ = self.transport.expect(patterns, 7)
+            if n != 1:
+                raise SwitchManagerError('허브 암호 입력 화면을 확인하지 못했습니다.')
+            self.transport.write(self.password.encode() + b'\r\n')
+            self.password = None
+            n, match, _ = self.transport.expect(patterns, 7)
+            if n != 2:
+                raise SwitchManagerError('허브 로그인 실패. 암호를 확인하세요. 자동 로그인 재시도는 하지 않습니다.')
+            self.prompt = rb'(?:^|[\r\n])[ \t]*' + _sm_re.escape(match.group(1)) + rb'(?:\([^\r\n]*\))?[>#][ \t]*$'
+            return self
+        except BaseException:
+            sock.close()
+            self.password = None
+            raise
+
+    def command(self, command, timeout=30):
+        # Caller generates commands from validated typed fields, never raw UI input.
+        if not _sm_allowed_command(command):
+            raise SwitchManagerError('지원하지 않는 허브 명령입니다.')
+        self.transport.write(command.encode() + b'\r\n')
+        deadline, output, confirmed = _sm_time.monotonic() + timeout, b'', False
+        while _sm_time.monotonic() < deadline:
+            n, _, chunk = self.transport.expect([
+                self.prompt, rb'(?i)--\s*more\s*--[^\r\n]*$',
+                rb'Confirm to overwrite current startup-config configuration \[Y/N\]:[ \t]*$',
+                rb'(?i)(?:\[[yY]/[nN]\]|\(yes/no\)|are you sure)[^\r\n]*$'],
+                min(2, max(0.01, deadline - _sm_time.monotonic())))
+            output += chunk
+            cleaned = _sm_clean(output)
+            if n == 0 or _sm_re.search(self.prompt, cleaned.encode()):
+                error = _sm_cli_error(cleaned)
+                if error:
+                    raise SwitchManagerError('허브가 명령을 거부했습니다: ' + error)
+                return cleaned
+            if n == 1:
+                self.transport.write(b' ')
+            elif n in (2, 3):
+                if n != 2 or command != 'write' or confirmed:
+                    self.transport.write(b'n\r\n')
+                    raise SwitchManagerError('예상하지 못한 허브 확인 요청을 취소했습니다.')
+                self.transport.write(b'y\r\n')
+                confirmed = True
+            if len(output) > 4_000_000:
+                raise SwitchManagerError('허브 응답 크기 제한을 초과했습니다.')
+        raise _SwitchConnectionError('허브 명령 응답 시간이 초과되었습니다: ' + command)
+
+    def close(self):
+        if self.transport:
+            self.transport.close()
+            self.transport = None
+        self.password = None
+
+    def __exit__(self, *unused):
+        self.close()
+
+
+def _sm_allowed_command(command):
+    if not isinstance(command, str) or command != command.strip() or any(ord(c) < 32 for c in command):
+        return False
+    if command in ('show version', 'show running-config', 'show startup-config', 'show vlan',
+                   'show mac-address-table', 'show reload', 'config terminal', 'exit', 'write', 'shutdown', 'no shutdown'):
+        return True
+    for expression in (r'(?:show (?:interface|switchport interface) |interface )Ethernet1/0/([1-9]|10)',
+                       r'interface vlan (\d+)', r'switchport access vlan (\d+)'):
+        match = _sm_re.fullmatch(expression, command)
+        if match:
+            return 1 <= int(match.group(1)) <= 4094
+    match = _sm_re.fullmatch(r'ip address ([0-9.]+) ([0-9.]+)', command)
+    if match:
+        try:
+            _sm_ipaddress.IPv4Interface(match.group(1) + '/' + match.group(2))
+            return True
+        except ValueError:
+            return False
+    match = _sm_re.fullmatch(r'(?:no )?ip route 0\.0\.0\.0 0\.0\.0\.0 ([0-9.]+)', command)
+    if match:
+        try:
+            _sm_ip(match.group(1))
+            return True
+        except ValueError:
+            return False
+    return False
+
+
+class SwitchManager:
+    """NEXTU management, with explicit previews, identity pins and private backups.
+
+    config_path is a separate switches.json path, never recording.json. Passwords
+    are supplied per request, retained only during that request and never saved.
+    No command changes host addresses, routes, Netplan, LTE, PoE, ring or uplinks.
+    """
+    def __init__(self, config_path):
+        self.config_path = _sm_Path(config_path)
+        self._plans = {}
+        self._closing = False
+        self._state_lock, self._operation_lock = _sm_threading.RLock(), _sm_threading.RLock()
+        self._client_factory = _SwitchCLI  # Dependency seam for offline tests.
+        self._route = _sm_route
+        self._collision = _sm_no_collision
+        self._sleep = _sm_time.sleep
+
+    def _begin_operation(self, busy_message):
+        if not self._operation_lock.acquire(False):
+            raise SwitchManagerError(busy_message)
+        with self._state_lock:
+            closing = self._closing
+        if closing:
+            self._operation_lock.release()
+            raise SwitchManagerError('프로그램을 종료하고 있습니다. 새 허브 작업을 시작하지 않습니다.')
+
+    def close(self):
+        """Drain active writes/rollback before daemon HTTP handlers may exit.
+
+        Do not hold the state lock while waiting: an active apply may need it to
+        save its new management endpoint or complete recovery.
+        """
+        with self._state_lock:
+            self._closing = True
+            self._plans.clear()
+        with self._operation_lock:
+            pass
+
+    def _load(self):
+        if self.config_path.is_symlink():
+            raise SwitchManagerError('허브 설정 파일은 심볼릭 링크를 사용할 수 없습니다.')
+        if not self.config_path.exists():
+            return {'switches': []}
+        try:
+            if self.config_path.stat().st_size > 2 * 1024 * 1024:
+                raise ValueError()
+            value = _sm_json.loads(self.config_path.read_text(encoding='utf-8'))
+            if not isinstance(value, dict):
+                raise ValueError()
+            rows = value.get('switches')
+            if not isinstance(rows, list) or len(rows) > 100:
+                raise ValueError()
+            return {'switches': [self._validate_connection(row) for row in rows]}
+        except (OSError, ValueError, TypeError):
+            raise SwitchManagerError('허브 설정 파일을 읽지 못했습니다.') from None
+
+    def get_config(self):
+        with self._state_lock:
+            return self._load()
+
+    def _validate_connection(self, payload):
+        if not isinstance(payload, dict):
+            raise SwitchManagerError('허브 연결 설정이 올바르지 않습니다.')
+        identity = str(payload.get('id') or _sm_secrets.token_hex(8))
+        if not _sm_re.fullmatch(r'[A-Za-z0-9_-]{1,64}', identity):
+            raise SwitchManagerError('허브 ID 형식이 올바르지 않습니다.')
+        name = str(payload.get('name', '')).strip()
+        if not 1 <= len(name) <= 100 or any(ord(c) < 32 for c in name):
+            raise SwitchManagerError('허브 이름을 1~100자로 입력하세요.')
+        interface = str(payload.get('interface', ''))
+        if not _sm_re.fullmatch(r'[A-Za-z0-9_.-]{1,15}', interface):
+            raise SwitchManagerError('Linux 관리 NIC 이름을 입력하세요. 예: enp2s0f1, nxmg100')
+        username = str(payload.get('username', ''))
+        if not _sm_re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', username):
+            raise SwitchManagerError('허브 관리 아이디를 입력하세요.')
+        mac = payload.get('expected_cpu_mac') or ''
+        if mac:
+            mac = _sm_mac(mac)
+        ports = payload.get('camera_ports', [])
+        if isinstance(ports, str):
+            ports = [item.strip() for item in ports.split(',') if item.strip()]
+        if not isinstance(ports, list):
+            raise SwitchManagerError('카메라 포트는 번호 목록으로 입력하세요.')
+        ports = sorted(set(_sm_int(p, 1, 8, '카메라 포트') for p in ports))
+        result = {'id': identity, 'name': name, 'target': _sm_ip(payload.get('target')),
+                  'source': _sm_ip(payload.get('source')), 'interface': interface,
+                  'username': username, 'expected_cpu_mac': mac, 'camera_ports': ports}
+        if result['source'] == result['target']:
+            raise SwitchManagerError('허브 IP와 ED 소스 IP가 같습니다.')
+        return result
+
+    def save_connection(self, payload):
+        self._begin_operation('허브 작업 중에는 연결 설정을 저장할 수 없습니다.')
+        try:
+            return self._save_connection(payload)
+        finally:
+            self._operation_lock.release()
+
+    def _save_connection(self, payload):
+        # Only this allowlist reaches disk; input passwords are deliberately ignored.
+        connection = self._validate_connection(payload)
+        with self._state_lock:
+            configuration = self._load()
+            rows = [row for row in configuration['switches'] if row['id'] != connection['id']]
+            if len(rows) >= 100:
+                raise SwitchManagerError('등록 가능한 허브 수를 초과했습니다.')
+            rows.append(connection)
+            directory = self.config_path.parent
+            directory.mkdir(parents=True, exist_ok=True)
+            if self.config_path.is_symlink():
+                raise SwitchManagerError('심볼릭 링크 설정 파일은 사용할 수 없습니다.')
+            temporary = directory / ('.switches-' + _sm_secrets.token_hex(12) + '.tmp')
+            try:
+                _sm_private_write(temporary, _sm_json.dumps({'switches': rows}, ensure_ascii=False, indent=2) + '\n')
+                _sm_os.replace(str(temporary), str(self.config_path))
+            finally:
+                if temporary.exists():
+                    temporary.unlink()
+            # A previous preview is invalid once connection settings are edited.
+            self._plans = {key: plan for key, plan in self._plans.items() if plan['connection']['id'] != connection['id']}
+        return {'switches': rows, 'connection': connection}
+
+    def _connection(self, payload):
+        if not isinstance(payload, dict):
+            raise SwitchManagerError('허브 요청 형식이 올바르지 않습니다.')
+        switch_id = payload.get('switch_id')
+        for row in self.get_config()['switches']:
+            if row['id'] == switch_id:
+                return row
+        raise SwitchManagerError('등록한 허브를 선택하세요.')
+
+    def _password(self, payload):
+        if not isinstance(payload, dict):
+            raise SwitchManagerError('허브 요청 형식이 올바르지 않습니다.')
+        password = payload.get('password')
+        if not isinstance(password, str) or len(password) > 256 or any(ord(c) < 32 or ord(c) == 127 for c in password):
+            raise SwitchManagerError('허브 암호를 입력하세요. 암호는 저장하지 않습니다.')
+        return password
+
+    def _check_identity(self, identity, connection, require_pin=False):
+        pin = connection['expected_cpu_mac']
+        if pin and identity.get('cpu_mac') != pin:
+            raise SwitchManagerError('저장한 CPU MAC과 실제 허브가 다릅니다. 다른 장비이므로 중단합니다.')
+        if require_pin and not pin:
+            raise SwitchManagerError('조회된 CPU MAC을 연결 설정에 저장한 뒤 변경 미리보기를 실행하세요.')
+        return identity.get('model') == _SM_MODEL and identity.get('firmware') == _SM_FIRMWARE
+
+    def _snapshot(self, client, connection, route):
+        identity = _sm_identity(client.command('show version'))
+        supported = self._check_identity(identity, connection)
+        result = {'switch_id': connection['id'], 'connection': dict(connection), 'identity': identity,
+                  'route': route, 'supported': supported, 'ports': [], 'management': None,
+                  'vlans': [], 'ed_ports': [], 'can_modify': False, 'warnings': []}
+        if not supported:
+            result['warnings'].append('이 모델/펌웨어의 쓰기 명령은 검증되지 않았습니다. 장비 식별 정보만 조회했습니다.')
+            return result, {}
+        raw = {command: client.command(command) for command in (
+            'show running-config', 'show startup-config', 'show vlan', 'show mac-address-table', 'show reload')}
+        sections = _sm_sections(raw['show running-config'])
+        result['vlans'] = sorted(set(int(value) for value in _sm_re.findall(r'^\s*(\d+)\s+\S+\s+Static\b', raw['show vlan'], _sm_re.M)))
+        for row in _sm_clean(raw['show mac-address-table']).splitlines():
+            match = _sm_re.search(_SM_MAC, row)
+            if match and _sm_mac(match.group()) == route['local_mac']:
+                result['ed_ports'].extend(int(p) for p in _sm_re.findall(r'Ethernet1/0/(\d+)\b', row, _sm_re.I))
+        result['ed_ports'] = sorted(set(result['ed_ports']))
+        managements = []
+        for name, rows in sections.items():
+            match = _sm_re.fullmatch(r'vlan(\d+)', name)
+            if match:
+                for row in rows:
+                    ip = _sm_re.fullmatch(r'ip address ([0-9.]+) ([0-9.]+)', row)
+                    if ip:
+                        managements.append({'vlan': int(match.group(1)), 'ip': ip.group(1), 'netmask': ip.group(2)})
+        management = [row for row in managements if row['ip'] == connection['target']]
+        gateways = _sm_re.findall(r'^\s*ip route (?:0\.0\.0\.0/0|0\.0\.0\.0 0\.0\.0\.0) ([0-9.]+)\s*$',
+                                 _sm_clean(raw['show running-config']), _sm_re.M)
+        if len(management) == 1:
+            result['management'] = dict(management[0], gateway=gateways[0] if len(gateways) == 1 else '',
+                                        gateway_count=len(gateways))
+        managed_vlans = {row['vlan'] for row in managements}
+        control_vlans = {int(value) for value in _sm_re.findall(
+            r'^\s*control-vlan\s+(\d+)\b', _sm_clean(raw['show running-config']), _sm_re.M | _sm_re.I)}
+        result['protected_vlans'] = sorted(managed_vlans | control_vlans)
+        result['camera_vlans'] = [vlan for vlan in result['vlans'] if vlan not in result['protected_vlans']]
+        ed_known = len(result['ed_ports']) == 1 and 1 <= result['ed_ports'][0] <= 8
+        for port in range(1, 11):
+            interface = client.command('show interface Ethernet1/0/{}'.format(port))
+            switchport = client.command('show switchport interface Ethernet1/0/{}'.format(port))
+            raw['interface{}'.format(port)], raw['switchport{}'.format(port)] = interface, switchport
+            rows = sections.get('ethernet1/0/{}'.format(port))
+            mode_match = _sm_re.search(r'^\s*Mode\s*:\s*(\w+)', switchport, _sm_re.M | _sm_re.I)
+            pvid_match = _sm_re.search(r'^\s*Port VID\s*:\s*(\d+)', switchport, _sm_re.M | _sm_re.I)
+            mode = mode_match.group(1).lower() if mode_match else 'unknown'
+            pvid = int(pvid_match.group(1)) if pvid_match else None
+            state = _sm_re.search(r'Ethernet1/0/\d+ is ([^,\r\n]+), line protocol is (\w+)', interface, _sm_re.I)
+            reasons = []
+            if port >= 9:
+                reasons.append('광 업링크')
+            if port in result['ed_ports']:
+                reasons.append('ED 관리 연결')
+            if not ed_known:
+                reasons.append('ED 연결 포트를 단일 구리 포트로 식별하지 못함')
+            if mode != 'access':
+                reasons.append('트렁크/하이브리드 또는 미확인 포트')
+            if pvid is None or pvid in managed_vlans or pvid in control_vlans:
+                reasons.append('관리 VLAN 또는 VLAN 미확인')
+            if rows is None:
+                reasons.append('포트 설정 미확인')
+            elif any(_sm_re.search(r'erps|channel-group|aggregation|port-channel', row, _sm_re.I) for row in rows):
+                reasons.append('링 또는 묶음 연결')
+            if port not in connection['camera_ports']:
+                reasons.append('카메라 포트로 등록하지 않음')
+            # More than one learned MAC indicates a downstream switch or unknown role.
+            macs = set()
+            for line in _sm_clean(raw['show mac-address-table']).splitlines():
+                if _sm_re.search(r'Ethernet1/0/{}\b'.format(port), line, _sm_re.I):
+                    for value in _sm_re.findall(_SM_MAC, line):
+                        macs.add(_sm_mac(value))
+            if len(macs) > 1:
+                reasons.append('여러 장비의 MAC이 학습된 포트')
+            result['ports'].append({'port': port, 'link': state.group(2).lower() if state else 'unknown',
+                                    'admin_up': None if rows is None else 'shutdown' not in rows,
+                                    'mode': mode, 'pvid': pvid, 'protected': bool(reasons), 'reasons': reasons,
+                                    'editable': not reasons, 'mac_count': len(macs)})
+        if not connection['expected_cpu_mac']:
+            result['warnings'].append('CPU MAC을 저장하기 전에는 설정을 변경할 수 없습니다.')
+        if not ed_known:
+            result['warnings'].append('ED 포트가 명확하지 않아 모든 설정 변경을 차단했습니다.')
+        if _sm_comparable(raw['show running-config']) != _sm_comparable(raw['show startup-config']):
+            result['warnings'].append('실행 설정과 저장 설정이 다릅니다. 기존 미저장 변경을 먼저 확인해야 합니다.')
+        if 'not configured' not in raw['show reload'].lower():
+            result['warnings'].append('기존 재부팅 예약 상태를 확인해야 합니다. 이 도구는 재부팅을 예약하거나 취소하지 않습니다.')
+        result['can_modify'] = bool(connection['expected_cpu_mac'] and ed_known and not result['warnings'])
+        return result, raw
+
+    def inspect(self, payload):
+        connection, password = self._connection(payload), self._password(payload)
+        self._begin_operation('다른 허브 작업이 진행 중입니다. 완료 후 다시 조회하세요.')
+        try:
+            route = self._route(connection)
+            with self._client_factory(connection, password) as client:
+                return self._snapshot(client, connection, route)[0]
+        finally:
+            password = None
+            self._operation_lock.release()
+
+    def _build_change(self, payload, snapshot, connection):
+        action = payload.get('action')
+        before, after, commands, inverse = {}, {}, [], []
+        warnings = ['적용 전에 원래 설정을 비공개 백업합니다. enp3/LTE·PC IP·Netplan은 변경하지 않습니다.']
+        next_connection = dict(connection)
+        if action in ('port', 'vlan'):
+            port = _sm_int(payload.get('port'), 1, 8, '포트')
+            current = next((row for row in snapshot['ports'] if row['port'] == port), None)
+            if not current or not current['editable']:
+                raise SwitchManagerError('보호된 포트는 변경할 수 없습니다: ' + ', '.join(current['reasons'] if current else ['포트 미확인']))
+            before = {'port': port, 'admin_up': current['admin_up'], 'vlan': current['pvid']}
+            if action == 'port':
+                state = payload.get('state')
+                if state not in ('on', 'off', 'bounce'):
+                    raise SwitchManagerError('포트 상태는 on, off, bounce 중 하나여야 합니다.')
+                if state == 'bounce' and not current['admin_up']:
+                    raise SwitchManagerError('이미 꺼진 포트는 먼저 켜기를 선택하세요.')
+                if state != 'bounce' and current['admin_up'] == (state == 'on'):
+                    raise SwitchManagerError('이미 요청한 포트 상태입니다.')
+                after = {'port': port, 'admin_up': state != 'off', 'state': state, 'bounce_seconds': 10 if state == 'bounce' else 0}
+                commands = ['shutdown', 'no shutdown'] if state == 'bounce' else ['no shutdown' if state == 'on' else 'shutdown']
+                inverse = ['no shutdown' if current['admin_up'] else 'shutdown']
+                warnings.append('포트 차단 중 해당 카메라의 녹화·센터 영상이 끊깁니다. 데이터 링크 제어이며 카메라 전원 재인가/PoE 제어가 아닙니다.')
+            else:
+                vlan = _sm_int(payload.get('vlan'), 1, 4094, 'VLAN')
+                if vlan not in snapshot['vlans']:
+                    raise SwitchManagerError('이미 생성된 VLAN만 선택할 수 있습니다. 광 업링크/VLAN 생성은 이 화면에서 변경하지 않습니다.')
+                if vlan == current['pvid']:
+                    raise SwitchManagerError('이미 지정한 VLAN입니다.')
+                if vlan in snapshot.get('protected_vlans', []):
+                    raise SwitchManagerError('카메라 포트를 허브 관리 또는 링 제어 VLAN으로 옮길 수 없습니다.')
+                after = {'port': port, 'vlan': vlan}
+                commands, inverse = ['switchport access vlan {}'.format(vlan)], ['switchport access vlan {}'.format(current['pvid'])]
+                warnings.append('대상 VLAN에 ED·센터 경로가 없으면 카메라 접속이 끊깁니다. 광 업링크와 ERPS 설정은 변경하지 않습니다.')
+            prefix, suffix = ['config terminal', 'interface Ethernet1/0/{}'.format(port)], ['exit', 'exit']
+            commands, inverse = prefix + commands + suffix, prefix + inverse + suffix
+        elif action == 'management':
+            current = snapshot.get('management')
+            if not current or current['gateway_count'] > 1:
+                raise SwitchManagerError('단일 관리 IP와 기본 게이트웨이를 식별하지 못했습니다.')
+            address, mask = _sm_ip(payload.get('ip')), str(payload.get('netmask', ''))
+            gateway = _sm_ip(payload.get('gateway')) if payload.get('gateway') else ''
+            try:
+                oldnet = _sm_ipaddress.IPv4Network(current['ip'] + '/' + current['netmask'], strict=False)
+                newnet = _sm_ipaddress.IPv4Network(address + '/' + mask, strict=False)
+            except ValueError:
+                raise SwitchManagerError('연속된 IPv4 서브넷 마스크를 입력하세요.') from None
+            source = _sm_ip(payload.get('new_source') or connection['source'])
+            if not 1 <= newnet.prefixlen <= 30 or any(_sm_ipaddress.IPv4Address(value) in (newnet.network_address, newnet.broadcast_address) for value in (address, source)):
+                raise SwitchManagerError('관리 IP·소스 IP·마스크 조합이 올바르지 않습니다.')
+            if _sm_ipaddress.IPv4Address(address) not in oldnet or _sm_ipaddress.IPv4Address(current['ip']) not in newnet:
+                raise SwitchManagerError('관리 연결 보호를 위해 기존 관리 대역 안에서만 IP·마스크를 변경할 수 있습니다.')
+            if _sm_ipaddress.IPv4Address(source) not in newnet or _sm_ipaddress.IPv4Address(source) not in oldnet:
+                raise SwitchManagerError('이미 설정된 ED 관리 소스 IP가 변경 전후 관리 대역에 모두 포함되어야 합니다.')
+            if gateway and (_sm_ipaddress.IPv4Address(gateway) not in newnet or gateway in (address, source) or _sm_ipaddress.IPv4Address(gateway) in (newnet.network_address, newnet.broadcast_address)):
+                raise SwitchManagerError('게이트웨이는 새 관리 대역 내의 다른 호스트 주소여야 합니다.')
+            before = {key: current[key] for key in ('vlan', 'ip', 'netmask', 'gateway')}
+            after = {'vlan': current['vlan'], 'ip': address, 'netmask': str(newnet.netmask), 'gateway': gateway}
+            if before == after:
+                raise SwitchManagerError('변경할 관리 설정이 없습니다.')
+            next_connection.update(target=address, source=source)
+            self._route(next_connection)
+            self._collision(connection, address)
+            def management_commands(old, new):
+                result = ['config terminal']
+                if old['gateway'] != new['gateway']:
+                    if old['gateway']:
+                        result.append('no ip route 0.0.0.0 0.0.0.0 ' + old['gateway'])
+                    if new['gateway']:
+                        result.append('ip route 0.0.0.0 0.0.0.0 ' + new['gateway'])
+                result += ['interface vlan {}'.format(new['vlan']), 'ip address {} {}'.format(new['ip'], new['netmask']), 'exit', 'exit']
+                return result
+            commands, inverse = management_commands(before, after), management_commands(after, before)
+            warnings.append('관리 IP 변경 후 새 주소로 다시 접속해 CPU MAC을 확인합니다. 재접속에 실패하면 기존 설정 복구를 시도하며, 접속 자체가 사라지면 원격 복구를 보장할 수 없습니다.')
+        else:
+            raise SwitchManagerError('지원하는 변경은 port, vlan, management입니다.')
+        if not all(_sm_allowed_command(c) for c in commands + inverse):
+            raise SwitchManagerError('검증되지 않은 명령이 포함되어 변경할 수 없습니다.')
+        return before, after, commands, inverse, next_connection, warnings
+
+    def plan(self, payload):
+        connection, password = self._connection(payload), self._password(payload)
+        self._begin_operation('다른 허브 작업이 진행 중입니다.')
+        try:
+            route = self._route(connection)
+            with self._client_factory(connection, password) as client:
+                snapshot, raw = self._snapshot(client, connection, route)
+            self._check_identity(snapshot['identity'], connection, require_pin=True)
+            if not snapshot['can_modify']:
+                raise SwitchManagerError('설정을 변경할 수 없습니다: ' + '; '.join(snapshot['warnings']))
+            before, after, commands, inverse, next_connection, warnings = self._build_change(payload, snapshot, connection)
+            now, token = _sm_time.time(), _sm_secrets.token_urlsafe(32)
+            public = {'plan_id': token, 'expires_at': now + 300, 'action': payload['action'], 'switch_id': connection['id'],
+                      'before': before, 'after': after, 'commands': commands, 'warnings': warnings}
+            with self._state_lock:
+                self._plans = {key: plan for key, plan in self._plans.items() if plan['expires_at'] > now}
+                if len(self._plans) >= 50:
+                    raise SwitchManagerError('미리보기가 너무 많습니다. 잠시 후 다시 시도하세요.')
+                self._plans[token] = dict(public, connection=connection, next_connection=next_connection,
+                                          fingerprint=_sm_hashlib.sha256(_sm_comparable(raw['show running-config']).encode()).hexdigest(),
+                                          inverse=inverse, identity=snapshot['identity'],
+                                          request={key: payload[key] for key in ('action', 'port', 'state', 'vlan', 'ip', 'netmask', 'gateway', 'new_source') if key in payload})
+            return public
+        finally:
+            password = None
+            self._operation_lock.release()
+
+    def _backup(self, snapshot, raw, plan):
+        base = self.config_path.parent / 'switch_backups'
+        base.mkdir(mode=0o700, exist_ok=True)
+        if base.is_symlink():
+            raise SwitchManagerError('백업 폴더에 심볼릭 링크를 사용할 수 없습니다.')
+        _sm_os.chmod(str(base), 0o700)
+        directory = base / (_sm_datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + _sm_secrets.token_hex(8))
+        directory.mkdir(mode=0o700)
+        for key in ('show running-config', 'show startup-config'):
+            _sm_private_write(directory / (key.replace(' ', '_') + '.txt'), raw[key])
+        public = {key: plan[key] for key in ('switch_id', 'action', 'before', 'after', 'commands', 'warnings')}
+        _sm_private_write(directory / 'plan.json', _sm_json.dumps(public, ensure_ascii=False, indent=2) + '\n')
+        _sm_private_write(directory / 'inspection.json', _sm_json.dumps(snapshot, ensure_ascii=False, indent=2) + '\n')
+        return directory
+
+    def _verify_change(self, snapshot, plan, reverting=False):
+        expected = plan['before'] if reverting else plan['after']
+        if snapshot['identity'] != plan['identity']:
+            raise SwitchManagerError('적용 후 허브 식별정보가 달라졌습니다.')
+        if plan['action'] == 'management':
+            current = snapshot.get('management') or {}
+            if any(current.get(key) != expected.get(key) for key in ('vlan', 'ip', 'netmask', 'gateway')):
+                raise SwitchManagerError('관리 설정 적용 결과가 미리보기와 다릅니다.')
+        else:
+            current = next(row for row in snapshot['ports'] if row['port'] == expected['port'])
+            key = 'vlan' if plan['action'] == 'vlan' else 'admin_up'
+            if current['pvid' if key == 'vlan' else key] != expected[key]:
+                raise SwitchManagerError('포트 설정 적용 결과가 미리보기와 다릅니다.')
+
+    def _send(self, client, commands, bounce=False):
+        for command in commands:
+            client.command(command)
+            if bounce and command == 'shutdown':
+                self._sleep(10)
+
+    def apply(self, payload, password=None, confirm=False):
+        if isinstance(payload, str):
+            payload = {'plan_id': payload, 'password': password, 'confirm': confirm}
+        password = self._password(payload)
+        if payload.get('confirm') is not True:
+            raise SwitchManagerError('미리보기 내용을 확인한 뒤 적용을 선택하세요.')
+        self._begin_operation('다른 허브 작업이 진행 중입니다.')
+        client, backup, changed, plan, saved = None, None, False, None, False
+        try:
+            with self._state_lock:
+                plan = self._plans.pop(payload.get('plan_id'), None)
+            if not plan or plan['expires_at'] < _sm_time.time():
+                raise SwitchManagerError('미리보기가 만료되었거나 이미 사용되었습니다. 다시 조회해 미리보기를 만드세요.')
+            if self._connection({'switch_id': plan['switch_id']}) != plan['connection']:
+                raise SwitchManagerError('연결 설정이 변경되었습니다. 다시 미리보기를 만드세요.')
+            connection = plan['connection']
+            route = self._route(connection)
+            client = self._client_factory(connection, password).__enter__()
+            snapshot, raw = self._snapshot(client, connection, route)
+            if snapshot['identity'] != plan['identity'] or not snapshot['can_modify']:
+                raise SwitchManagerError('장비 또는 보호 상태가 달라졌습니다. 다시 미리보기를 만드세요.')
+            fingerprint = _sm_hashlib.sha256(_sm_comparable(raw['show running-config']).encode()).hexdigest()
+            if fingerprint != plan['fingerprint']:
+                raise SwitchManagerError('미리보기 후 허브 설정이 바뀌었습니다. 다시 확인하세요.')
+            # Re-evaluate protected ports, routes and duplicate addresses immediately before writes.
+            self._build_change(plan['request'], snapshot, connection)
+            backup = self._backup(snapshot, raw, plan)
+            changed = True  # Partial command failure must still enter recovery.
+            try:
+                self._send(client, plan['commands'], plan['action'] == 'port' and plan['after'].get('state') == 'bounce')
+            except (_SwitchConnectionError, OSError):
+                # Changing the local SVI address can close the established TCP
+                # session before its final prompt. Only a fresh, pinned login
+                # and an exact settings comparison may turn that into success.
+                if plan['action'] != 'management' or plan['before']['ip'] == plan['after']['ip']:
+                    raise
+            if plan['action'] == 'management':
+                client.close()
+                client = None
+                client = self._client_factory(plan['next_connection'], password).__enter__()
+            next_connection = plan['next_connection']
+            after, after_raw = self._snapshot(client, next_connection, self._route(next_connection))
+            self._verify_change(after, plan)
+            if _sm_unowned_config(raw['show running-config'], plan) != _sm_unowned_config(after_raw['show running-config'], plan):
+                raise SwitchManagerError('선택한 항목 외의 설정이 변경되었습니다. 저장을 중단하고 원래 항목을 복구합니다.')
+            client.command('write', timeout=60)
+            saved = True
+            running, startup = client.command('show running-config'), client.command('show startup-config')
+            if _sm_comparable(running) != _sm_comparable(startup):
+                raise SwitchManagerError('실행 설정과 저장본의 일치를 확인하지 못했습니다.')
+            # The pre-save snapshot intentionally reports unsaved changes. Return
+            # a new post-save view so a successful apply does not disable the UI.
+            after, final_raw = self._snapshot(client, next_connection, self._route(next_connection))
+            self._verify_change(after, plan)
+            if _sm_unowned_config(raw['show running-config'], plan) != _sm_unowned_config(final_raw['show running-config'], plan):
+                raise SwitchManagerError('저장 확인 중 다른 설정 변경이 감지되었습니다.')
+            if plan['action'] == 'management':
+                self._save_connection(next_connection)
+            _sm_private_write(backup / 'after_running.txt', running)
+            result = {'status': 'applied', 'backup_path': str(backup), 'detail': '설정을 적용하고 저장본까지 확인했습니다.', 'inspection': after}
+            _sm_private_write(backup / 'result.json', _sm_json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+            return result
+        except Exception as exc:
+            if not changed or plan is None:
+                if isinstance(exc, SwitchManagerError):
+                    raise
+                raise SwitchManagerError('허브 조회에 실패했습니다. 설정은 변경하지 않았습니다.') from None
+            # Restore only the exact fields this plan owns, never replay a whole backup.
+            restored, recovery_error = False, ''
+            recovery_connections = [plan['next_connection']]
+            if plan['connection'] != plan['next_connection']:
+                recovery_connections.append(plan['connection'])
+            for recovery in recovery_connections:
+                try:
+                    if client:
+                        client.close()
+                    client = None
+                    self._route(recovery)
+                    client = self._client_factory(recovery, password).__enter__()
+                    identity = _sm_identity(client.command('show version'))
+                    if identity != plan['identity']:
+                        raise SwitchManagerError('복구 대상 CPU MAC 또는 장비 정보가 다릅니다.')
+                    try:
+                        self._send(client, plan['inverse'])
+                    except (_SwitchConnectionError, OSError):
+                        if plan['action'] != 'management' or plan['before']['ip'] == plan['after']['ip']:
+                            raise
+                    if plan['action'] == 'management':
+                        client.close()
+                        client = None
+                        client = self._client_factory(plan['connection'], password).__enter__()
+                    original, recovered_raw = self._snapshot(client, plan['connection'], self._route(plan['connection']))
+                    self._verify_change(original, plan, reverting=True)
+                    if _sm_comparable(recovered_raw['show running-config']) != _sm_comparable(raw['show running-config']):
+                        raise SwitchManagerError('요청한 항목은 복구했지만 다른 설정 변경이 있어 전체 저장을 수행하지 않습니다.')
+                    client.command('write', timeout=60)
+                    if _sm_comparable(client.command('show running-config')) != _sm_comparable(client.command('show startup-config')):
+                        raise SwitchManagerError('복구 저장본을 확인하지 못했습니다.')
+                    if plan['action'] == 'management':
+                        self._save_connection(plan['connection'])
+                    restored = True
+                    break
+                except Exception as recovery_exc:
+                    recovery_error = str(recovery_exc) if isinstance(recovery_exc, SwitchManagerError) else '복구 접속 또는 저장 실패'
+            reason = str(exc) if isinstance(exc, SwitchManagerError) else '허브 접속 또는 저장 중 오류'
+            result = {'status': 'rolled_back' if restored else 'failed', 'backup_path': str(backup),
+                      'detail': reason + (' 원래 설정으로 복구하고 저장했습니다.' if restored else ' 원격 복구를 확인하지 못했습니다. ' + recovery_error),
+                      'rollback_verified': restored, 'reboot_scheduled': False}
+            if backup:
+                try:
+                    _sm_private_write(backup / 'result.json', _sm_json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+                except OSError:
+                    pass
+            return result
+        finally:
+            password = None
+            try:
+                if client:
+                    try:
+                        client.close()
+                    except OSError:
+                        # A disconnected socket during final cleanup must not
+                        # mask a verified result or strand the operation lock.
+                        pass
+            finally:
+                self._operation_lock.release()
+# END EMBEDDED SWITCH_MANAGER
+
 # BEGIN EMBEDDED UI_SERVER
 # Embedded into record.py by build_embedded.py; localhost-only, standard-library UI.
 from collections import deque
@@ -4444,6 +5969,54 @@ def recording_scope_from_id(identifier, root_info, trash=False):
         raise ValueError("영상 목록이 변경되었거나 식별자가 올바르지 않습니다. 목록을 새로고침하세요.") from None
 
 
+def recording_folder_parts(relative):
+    if (not isinstance(relative, str) or len(relative) > 4096 or "\\" in relative
+            or any(ord(char) < 32 or ord(char) == 127 for char in relative)):
+        raise ValueError("영상 폴더 경로가 올바르지 않습니다.")
+    parts = relative.split("/") if relative else []
+    if len(parts) > 31 or any(part in ("", ".", "..") or part.startswith(".") for part in parts):
+        raise ValueError("저장 폴더 안의 일반 폴더만 사용할 수 있습니다.")
+    return parts
+
+
+def recording_folder_id(relative, root_info, folder_info):
+    recording_folder_parts(relative)
+    value = {"path": relative, "root": [root_info.st_dev, root_info.st_ino],
+             "folder": [folder_info.st_dev, folder_info.st_ino], "kind": "folder", "version": 1}
+    return base64.urlsafe_b64encode(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
+
+
+@contextmanager
+def recording_open_folder(root_fd, identifier):
+    try:
+        if not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,8192}", identifier):
+            raise ValueError()
+        raw = base64.b64decode(identifier + "=" * (-len(identifier) % 4), altchars=b"-_", validate=True)
+        value = json.loads(raw.decode("utf-8"))
+        root_info = os.fstat(root_fd)
+        if (not isinstance(value, dict) or value.get("version") != 1 or value.get("kind") != "folder"
+                or value.get("root") != [root_info.st_dev, root_info.st_ino]
+                or not isinstance(value.get("folder"), list) or len(value["folder"]) != 2
+                or any(isinstance(number, bool) or not isinstance(number, int) for number in value["folder"])):
+            raise ValueError()
+        relative = value["path"]
+        parts = recording_folder_parts(relative)
+    except (ValueError, UnicodeError, TypeError, KeyError):
+        raise ValueError("영상 폴더가 변경되었거나 식별자가 올바르지 않습니다. 목록을 새로고침하세요.") from None
+    try:
+        with recording_directory(root_fd, parts) as folder_fd:
+            info = os.fstat(folder_fd)
+            if [info.st_dev, info.st_ino] != value["folder"]:
+                raise ValueError("영상 폴더가 변경되었습니다. 목록을 새로고침하세요.")
+            yield folder_fd, relative
+    except (FileNotFoundError, NotADirectoryError):
+        raise ValueError("영상 폴더가 없어졌거나 변경되었습니다. 목록을 새로고침하세요.") from None
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError("심볼릭 링크 폴더는 열 수 없습니다. 목록을 새로고침하세요.") from None
+        raise
+
+
 @contextmanager
 def recording_directory(root_fd, parts=(), create=False):
     fd = os.dup(root_fd)
@@ -4488,6 +6061,27 @@ def recording_walk(root_fd, prefix=()):
                     yield from recording_walk(child, prefix + (name,))
             elif stat.S_ISREG(info.st_mode) and name.lower().endswith(".mp4"):
                 yield "/".join(prefix + (name,)), info
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                continue
+            raise
+
+
+def recording_folder_walk(root_fd, prefix=()):
+    """List the real directory hierarchy, including empty directories, without links."""
+    yield "/".join(prefix), os.fstat(root_fd)
+    if len(prefix) >= 31:
+        return
+    for name in sorted(os.listdir(root_fd)):
+        if name.startswith(".") or "/" in name or "\\" in name or any(ord(c) < 32 or ord(c) == 127 for c in name):
+            continue
+        try:
+            info = os.stat(name, dir_fd=root_fd, follow_symlinks=False)
+            if stat.S_ISDIR(info.st_mode):
+                with recording_directory(root_fd, (name,)) as child:
+                    yield from recording_folder_walk(child, prefix + (name,))
         except (FileNotFoundError, NotADirectoryError):
             continue
         except OSError as exc:
@@ -4590,7 +6184,7 @@ def recording_rename_exclusive(source_fd, source_name, target_fd, target_name):
 
 def camera_connection_defaults(mode="setup"):
     """The editable UI model never contains a stored camera password."""
-    return {"mode": mode, "ips": "", "username": "admin", "password": "",
+    return {"mode": mode, "ips": "", "username": "", "password": "",
             "password_saved": False, "port": 554, "path": "/profile2/media.smp"}
 
 
@@ -4624,6 +6218,8 @@ def camera_connection_for_ui(data):
     cameras = data.get("cameras", "auto")
     if cameras == "auto":
         return camera_connection_defaults()
+    if cameras == []:
+        return camera_connection_defaults("direct")
     result = camera_connection_defaults("custom")
     if not isinstance(cameras, list) or not cameras:
         return result
@@ -4664,7 +6260,7 @@ def cameras_from_connection(connection, data):
         raise ValueError("카메라 주소에는 IPv4 주소만 입력하세요. RTSP 주소나 주소 범위는 사용할 수 없습니다.") from None
     if not ips or len(ips) > 256:
         raise ValueError("카메라 IPv4 주소는 1개 이상, 256개 이하로 입력하세요.")
-    username, password = connection.get("username", "admin"), connection.get("password", "")
+    username, password = connection.get("username", ""), connection.get("password", "")
     if any(not isinstance(value, str) or len(value) > 1024 or any(ord(c) < 32 or ord(c) == 127 for c in value)
            for value in (username, password)):
         raise ValueError("카메라 계정과 비밀번호 형식을 확인하세요.")
@@ -4768,7 +6364,7 @@ def friendly_ui_error(exc):
         ("already using output_dir", "같은 저장 폴더를 사용하는 녹화가 이미 실행 중입니다."),
         ("not writable", "저장 폴더에 쓸 수 없습니다. 경로와 장비 계정의 권한을 확인하세요."),
         ("already passed today", "시작 시각이 이미 지났습니다. 이후 시각을 고르거나 지금 시작을 선택하세요."),
-        ("Weather region", "기상청 지역 목록에서 시·도와 시·군·구를 선택하세요."),
+        ("Weather region", "날씨 지역 목록에서 시·도와 시·군·구를 선택하세요."),
         ("time-ranges", "시간 구간은 시작·종료 시각을 모두 지정하고, 두 시각을 다르게 설정하세요."),
         ("recording_dates", "녹화 날짜를 확인하세요. 날짜는 YYYY-MM-DD 형식으로 중복 없이 지정합니다."),
         ("segment_minutes", "파일 분할 길이를 1초 이상, 1,440분 이하로 입력하세요."),
@@ -4790,6 +6386,14 @@ def friendly_ui_error(exc):
     return text[:600]
 
 
+CAMERA_SETUP_MESSAGE = "장비 설정에서 카메라 IP와 필요한 계정을 입력하거나 기존 setup.ini를 선택한 뒤 설정을 저장하세요."
+
+
+def camera_setup_required(data):
+    """Only the explicit empty-list draft is an unfinished first-run setup."""
+    return isinstance(data, dict) and data.get("cameras") == []
+
+
 class RecorderUiController:
     def __init__(self, config_path):
         self.config_path = Path(config_path).expanduser().resolve()
@@ -4807,6 +6411,8 @@ class RecorderUiController:
         self.cached_settings = None
         self.cached_revision = None
         self.live_view = LiveViewManager(self.settings)
+        self.camera_snapshots = CameraSnapshotManager(self.settings, self.config_path)
+        self.switch_manager = SwitchManager(self.config_path.parent / "switches.json")
         self.camera_profiles = CameraProfileManager(self)
         self.camera_ping = CameraPingMonitor(self.settings, self.config_path)
         self.shared_browser_server = None
@@ -4885,6 +6491,8 @@ class RecorderUiController:
         # Keep this separate from action_lock: close() joins the ping thread.
         with self.settings_lock:
             data, revision = self.read_config()
+            if camera_setup_required(data):
+                raise ValueError(CAMERA_SETUP_MESSAGE)
             if refresh or self.cached_settings is None or revision != self.cached_revision:
                 self.cached_settings = settings_from_data(data, self.config_path.parent)
                 self.cached_revision = revision
@@ -4894,7 +6502,7 @@ class RecorderUiController:
     def configuration(self):
         data, revision = self.read_config()
         safe = {key: data[key] for key in ("setup_ini", "output_dir", "intersection_name", "weather", "recording_dates",
-                 "time_ranges", "segment_minutes", "retention_days", "min_free_gb", "weather_condition") if key in data}
+                 "time_ranges", "recording_mode", "segment_minutes", "retention_days", "min_free_gb", "weather_condition") if key in data}
         safe.setdefault("weather_condition", default_weather_config())
         if isinstance(safe["weather_condition"], dict):
             safe["weather_condition"] = {key: value for key, value in safe["weather_condition"].items()
@@ -4902,6 +6510,7 @@ class RecorderUiController:
         safe.setdefault("setup_ini", "auto")
         safe.setdefault("output_dir", "auto")
         safe.setdefault("segment_minutes", data.get("segment_seconds", 1800) / 60)
+        safe.setdefault("recording_mode", "split" if "segment_minutes" in data or "segment_seconds" in data else "window")
         if "time_ranges" not in safe and "schedules" in data:
             # Display only representable minute-based schedules without silently
             # replacing an existing all-day or fractional-second legacy plan.
@@ -4923,7 +6532,9 @@ class RecorderUiController:
              "direct_url": "url" in item}
             for item in (cameras if isinstance(cameras, list) else []) if isinstance(item, dict)]
         safe["camera_connection"] = camera_connection_for_ui(data)
-        return {"config": safe, "revision": revision, "path": str(self.config_path), "regions": region_data()}
+        required = camera_setup_required(data)
+        return {"config": safe, "revision": revision, "path": str(self.config_path), "regions": region_data(),
+                "setup_required": required, "setup_message": CAMERA_SETUP_MESSAGE if required else ""}
 
     def setup_candidates(self):
         candidates = set()
@@ -5044,7 +6655,30 @@ class RecorderUiController:
             pass
         return items
 
-    def recordings(self, camera="", day="", offset=0, limit=50, trash=False):
+    @staticmethod
+    def recording_folders(root_fd, candidates):
+        root_info = os.fstat(root_fd)
+        folders = []
+        by_path = {}
+        for relative, info in recording_folder_walk(root_fd):
+            parts = recording_folder_parts(relative)
+            parent = by_path.get("/".join(parts[:-1])) if parts else None
+            item = {"id": recording_folder_id(relative, root_info, info),
+                    "name": parts[-1] if parts else "저장 폴더", "path": relative,
+                    "parent_id": parent["id"] if parent else None, "depth": len(parts),
+                    "count": 0, "size": 0, "exists": True}
+            folders.append(item)
+            by_path[relative] = item
+        for relative, info in candidates:
+            parts = recording_relative_parts(relative)
+            for length in range(len(parts)):
+                parent = by_path.get("/".join(parts[:length]))
+                if parent is not None:
+                    parent["count"] += 1
+                    parent["size"] += info.st_size
+        return folders
+
+    def recordings(self, camera="", day="", offset=0, limit=50, trash=False, folder=""):
         try:
             if isinstance(offset, bool) or isinstance(limit, bool):
                 raise ValueError()
@@ -5053,37 +6687,83 @@ class RecorderUiController:
                 raise ValueError()
         except (ValueError, TypeError):
             raise ValueError("영상 목록 범위가 올바르지 않습니다. 한 번에 1~100개를 조회하세요.") from None
-        if not isinstance(camera, str) or not isinstance(day, str):
+        if not isinstance(camera, str) or not isinstance(day, str) or not isinstance(folder, str):
             raise ValueError("영상 검색 조건이 올바르지 않습니다.")
+        if trash and folder:
+            raise ValueError("휴지통에서는 폴더를 선택할 수 없습니다.")
         if day:
             try:
                 if date.fromisoformat(day).isoformat() != day:
                     raise ValueError()
             except ValueError:
                 raise ValueError("영상 날짜는 YYYY-MM-DD 형식으로 선택하세요.") from None
+        folders, breadcrumbs = [], []
+        selected_path = ""
+        current_folder = None if trash else {"id": "", "name": "저장 폴더", "path": "", "exists": False}
         try:
             with self.recording_root() as root_fd:
                 if trash:
                     items = self.recording_trash_items(root_fd)
                 else:
+                    if folder:
+                        with recording_open_folder(root_fd, folder) as (_, selected_path):
+                            pass
                     candidates = list(recording_walk(root_fd))
                     activity = self.recording_activity(root_fd, candidates)
                     items = [self.recording_item(relative, info, activity) for relative, info in candidates]
                     root_info = os.fstat(root_fd)
                     for item, (relative, info) in zip(items, candidates):
                         item["id"] = recording_scoped_id(relative, root_info, info)
+                    folders = self.recording_folders(root_fd, candidates)
+                    by_path = {entry["path"]: entry for entry in folders}
+                    if selected_path not in by_path or (folder and by_path[selected_path]["id"] != folder):
+                        raise ValueError("영상 폴더가 변경되었습니다. 목록을 새로고침하세요.")
+                    current_folder = by_path[selected_path]
+                    parts = recording_folder_parts(selected_path)
+                    breadcrumbs = [by_path["/".join(parts[:length])] for length in range(len(parts) + 1)]
         except FileNotFoundError:
+            if folder:
+                raise ValueError("저장 폴더가 없어졌거나 변경되었습니다. 목록을 새로고침하세요.") from None
             items = []
         # A current URL is not evidence of the source of a historical recording.
         # Keep it separate from the host saved in new recording filenames.
         current_hosts = {entry.name: urlsplit(entry.url).hostname for entry in self.settings().cameras}
         for item in items:
             item["current_camera_host"] = current_hosts.get(item["camera"], "")
+        if selected_path:
+            items = [item for item in items if item["relative_path"].startswith(selected_path + "/")]
         cameras, dates = sorted({item["camera"] for item in items}), sorted({item["date"] for item in items}, reverse=True)
         selected = [item for item in items if (not camera or item["camera"] == camera) and (not day or item["date"] == day)]
         selected.sort(key=lambda item: (item.get("trashed_at", item["modified_at"]), item["relative_path"]), reverse=True)
         return {"items": selected[offset:offset + limit], "total": len(selected), "offset": offset, "limit": limit,
-                "cameras": cameras, "dates": dates, "trash": bool(trash)}
+                "cameras": cameras, "dates": dates, "trash": bool(trash),
+                "total_size": sum(item["size"] for item in selected), "folders": folders,
+                "current_folder": current_folder, "breadcrumbs": breadcrumbs}
+
+    def open_recording_folder(self, identifier):
+        with self.action_lock, self.recording_root() as root_fd:
+            with recording_open_folder(root_fd, identifier) as (folder_fd, relative):
+                if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+                    raise ValueError("이 ED 프로그램에 연결된 데스크톱 화면이 없습니다. 웹에서 폴더와 영상을 확인하세요.")
+                executable = shutil.which("xdg-open")
+                if not executable:
+                    raise ValueError("이 ED에서 파일 관리자를 찾을 수 없습니다. 웹에서 폴더와 영상을 확인하세요.")
+                # Pin cwd to the opened inode. Never pass an arbitrary URL/path to the opener,
+                # or reopen the selected directory through a replaceable path or symlink.
+                environment = os.environ.copy()
+                environment.pop("PWD", None)
+                process = subprocess.Popen([executable, "."], cwd="/proc/self/fd/{}".format(folder_fd),
+                                           pass_fds=(folder_fd,), env=environment,
+                                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL)
+                try:
+                    code = process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    threading.Thread(target=process.wait, daemon=True).start()
+                else:
+                    if code:
+                        raise ValueError("이 ED의 파일 관리자에서 폴더를 열지 못했습니다. 데스크톱 로그인 상태를 확인하세요.")
+        return {"message": "프로그램이 실행 중인 ED의 파일 관리자에 폴더 열기를 요청했습니다.", "path": relative}
 
     def recording_media(self, identifier):
         with self.recording_root() as root_fd:
@@ -5189,16 +6869,24 @@ class RecorderUiController:
 
     def state(self):
         result = {"running": self._running(), "mode": self.mode, "error": "", "external_running": False,
-                  "forecast_busy": self.preview_busy, "now": datetime.now(KST).isoformat()}
+                  "forecast_busy": self.preview_busy, "now": datetime.now(KST).isoformat(),
+                  "setup_required": False, "setup_message": ""}
         result["exit_code"] = self.process.poll() if self.process is not None else None
+        result["once_camera"] = getattr(self, "once_camera", None) if self.mode == "once" else None
         with self.log_lock:
             result["logs"] = list(self.logs)
         try:
-            settings = self.settings()
+            data, _ = self.read_config()
+            required = camera_setup_required(data)
+            result["setup_required"] = required
+            result["setup_message"] = CAMERA_SETUP_MESSAGE if required else ""
+            settings = (settings_from_data(data, self.config_path.parent, allow_unconfigured=True)
+                        if required else self.settings())
             status = safe_read_status(settings.output_dir)
             result["output_dir"] = str(settings.output_dir)
             result["cameras"] = [{"name": camera.name, "client_no": camera.client_no,
-                                  "intersection": camera.intersection, "direction": camera.direction}
+                                  "intersection": camera.intersection, "direction": camera.direction,
+                                  "ip": urlsplit(camera.url).hostname or ""}
                                  for camera in settings.cameras]
             result["active_cameras"] = status.get("active_cameras", [])
             result["once_end"] = status.get("once_end")
@@ -5233,7 +6921,7 @@ class RecorderUiController:
 
     def save(self, patch, revision):
         allowed = {"setup_ini", "output_dir", "intersection_name", "weather", "recording_dates", "time_ranges",
-                   "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection"}
+                   "recording_mode", "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection"}
         if not isinstance(patch, dict) or set(patch) - allowed:
             raise ValueError("저장할 설정 항목이 올바르지 않습니다.")
         with self.action_lock:
@@ -5250,7 +6938,10 @@ class RecorderUiController:
                 data.pop("schedules", None)
             if "segment_minutes" in patch:
                 data.pop("segment_seconds", None)
-            proposed = settings_from_data(data, self.config_path.parent)
+            required = camera_setup_required(data)
+            if required and self._running():
+                raise ValueError("녹화 중에는 카메라가 없는 설정을 적용할 수 없습니다. 녹화를 중지한 뒤 다시 설정하세요.")
+            proposed = settings_from_data(data, self.config_path.parent, allow_unconfigured=required)
             resume = self._running() and self.mode == "scheduled"
             if resume:
                 check_output_access(proposed)
@@ -5265,8 +6956,9 @@ class RecorderUiController:
             self.preview = None
             if resume:
                 self.start("scheduled")
-            return {"message": "설정을 저장하고 예약 녹화를 다시 시작했습니다." if resume else "설정을 저장했습니다.",
-                    "revision": self.read_config()[1]}
+            message = ("설정을 저장하고 예약 녹화를 다시 시작했습니다." if resume else
+                       "기본 설정을 저장했습니다. 녹화 전 카메라를 등록하세요." if required else "설정을 저장했습니다.")
+            return {"message": message, "revision": self.read_config()[1], "setup_required": required}
 
     def check(self):
         settings = self.settings(refresh=True)
@@ -5274,7 +6966,7 @@ class RecorderUiController:
         check_ffmpeg(settings)
         return {"message": "설정 검사를 통과했습니다. 실제 영상은 5분 시험 녹화 후 확인하세요."}
 
-    def start(self, mode, minutes=5, start_at=None):
+    def start(self, mode, minutes=1, start_at=None, camera=None):
         with self.action_lock:
             if self.closing:
                 raise ValueError("화면을 종료하고 있습니다.")
@@ -5283,6 +6975,10 @@ class RecorderUiController:
             if mode not in ("scheduled", "once"):
                 raise ValueError("녹화 실행 방식이 올바르지 않습니다.")
             settings = self.settings(refresh=True)
+            if camera not in (None, ""):
+                if mode != "once":
+                    raise ValueError("카메라 선택은 한 번만 녹화에서 사용할 수 있습니다.")
+                settings = select_once_camera(settings, camera)
             check_output_access(settings)
             check_ffmpeg(settings)
             if sys.platform != "linux":
@@ -5295,6 +6991,8 @@ class RecorderUiController:
             if mode == "once":
                 make_once_window(minutes, start_at)
                 command += ["--record-minutes", str(minutes)]
+                if camera not in (None, ""):
+                    command += ["--record-camera", camera]
                 if start_at:
                     command += ["--start-at", start_at]
             with self.log_lock:
@@ -5303,10 +7001,12 @@ class RecorderUiController:
                                             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
                                             start_new_session=True)
             self.mode = mode
+            self.once_camera = camera or None if mode == "once" else None
             self.reader = threading.Thread(target=self._read_log, args=(self.process,), daemon=True)
             self.reader.start()
             return {"message": "예약 녹화를 시작했습니다. 시간표와 날씨 조건에 따라 대기할 수 있습니다." if mode == "scheduled"
-                    else "한 번 녹화를 시작했습니다. 지정한 시간이 끝나면 자동 종료합니다."}
+                    else ("{} · {}분 녹화를 시작했습니다. 지정한 시간이 끝나면 자동 종료합니다.".format(
+                        camera or "모든 카메라", minutes))}
 
     def _read_log(self, process):
         try:
@@ -5375,8 +7075,10 @@ class RecorderUiController:
     def close(self):
         with self.action_lock:
             self.closing = True
+            self.switch_manager.close()
             self.camera_ping.close()
             self.live_view.close()
+            self.camera_snapshots.close()
             if self.shared_browser_server is not None:
                 self.shared_browser_server.shutdown()
                 self.shared_browser_server.server_close()
@@ -5488,7 +7190,7 @@ def make_ui_handler(controller, token, port):
                 parsed = urlsplit(self.path)
                 path = parsed.path
                 query = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=20)
-                media_token = self._query_value(query, "token") if path == "/api/recordings/media" else None
+                media_token = self._query_value(query, "token") if path in ("/api/recordings/media", "/api/snapshots/media") else None
                 if not self._allowed(path != "/", media_token):
                     return
                 if path == "/":
@@ -5500,6 +7202,24 @@ def make_ui_handler(controller, token, port):
                     self._json(controller.state())
                 elif path == "/api/live/cameras":
                     self._json({"cameras": controller.live_view.cameras()})
+                elif path == "/api/snapshots":
+                    self._json({"items": controller.camera_snapshots.list()})
+                elif path == "/api/snapshots/media":
+                    download = self._query_value(query, "download")
+                    if download not in ("", "0", "1"):
+                        raise ValueError("이미지 다운로드 조건이 올바르지 않습니다.")
+                    item, content = controller.camera_snapshots.media(self._query_value(query, "id"))
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Content-Length", str(len(content)))
+                    disposition = "attachment" if download == "1" else "inline"
+                    self.send_header("Content-Disposition", disposition + "; filename=\"camera.png\"; filename*=UTF-8''" + quote(item["filename"], safe=""))
+                    self._security_headers()
+                    self.end_headers()
+                    if self.command != "HEAD":
+                        self.wfile.write(content)
+                elif path == "/api/switch/config":
+                    self._json(controller.switch_manager.get_config())
                 elif path == "/api/ping/history":
                     self._json(controller.camera_ping.history(self._query_value(query, "camera") or None,
                                int(self._query_value(query, "hours", "24"))))
@@ -5532,7 +7252,8 @@ def make_ui_handler(controller, token, port):
                     if trash not in ("0", "1"):
                         raise ValueError("휴지통 조회 조건이 올바르지 않습니다.")
                     self._json(controller.recordings(self._query_value(query, "camera"), self._query_value(query, "date"),
-                               self._query_value(query, "offset", "0"), self._query_value(query, "limit", "50"), trash == "1"))
+                               self._query_value(query, "offset", "0"), self._query_value(query, "limit", "50"), trash == "1",
+                               self._query_value(query, "folder")))
                 elif path == "/api/recordings/media":
                     self._media(self._query_value(query, "id"), self._query_value(query, "download") == "1")
                 else:
@@ -5560,13 +7281,23 @@ def make_ui_handler(controller, token, port):
                 elif self.path == "/api/check":
                     result = controller.check()
                 elif self.path == "/api/start":
-                    result = controller.start(data.get("mode"), data.get("minutes", 5), data.get("start_at") or None)
+                    result = controller.start(data.get("mode"), data.get("minutes", 1), data.get("start_at") or None, data.get("camera"))
                 elif self.path == "/api/stop":
                     result = controller.stop()
                 elif self.path == "/api/live/start":
                     result = controller.live_view.start(data.get("camera"), data.get("profile", "current"))
                 elif self.path == "/api/live/stop":
                     result = controller.live_view.stop(data.get("session"))
+                elif self.path == "/api/snapshots/capture":
+                    result = controller.camera_snapshots.capture(data.get("camera"), data.get("profile", "current"))
+                elif self.path == "/api/switch/config":
+                    result = controller.switch_manager.save_connection(data)
+                elif self.path == "/api/switch/inspect":
+                    result = controller.switch_manager.inspect(data)
+                elif self.path == "/api/switch/plan":
+                    result = controller.switch_manager.plan(data)
+                elif self.path == "/api/switch/apply":
+                    result = controller.switch_manager.apply(data)
                 elif self.path == "/api/ping/check":
                     result = controller.camera_ping.request_check()
                 elif self.path == "/api/camera-profiles/read":
@@ -5588,6 +7319,8 @@ def make_ui_handler(controller, token, port):
                     result = controller.trash_recording(data.get("id"))
                 elif self.path == "/api/recordings/restore":
                     result = controller.restore_recording(data.get("id"))
+                elif self.path == "/api/recordings/open-folder":
+                    result = controller.open_recording_folder(data.get("folder"))
                 else:
                     self._json({"error": "없는 경로입니다."}, 404)
                     return
@@ -6108,10 +7841,10 @@ class RecorderDesktopApp:
                                       font=(self.font_family, 11), background="#ffffff", foreground="#1d304a")
         self.camera_ips.grid(row=0, column=1, sticky="ew", pady=5)
         self.camera_ips.bind("<<Modified>>", self._camera_ips_changed)
-        self.ttk.Label(self.direct_frame, text="예: 169.254.130.12, 169.254.130.13\n한 줄에 하나씩 또는 쉼표로 구분하세요. 입력한 카메라를 모두 녹화합니다.",
+        self.ttk.Label(self.direct_frame, text="카메라의 실제 IPv4 주소를 한 줄에 하나씩 또는 쉼표로 구분해 입력하세요. 입력한 카메라를 모두 녹화합니다.",
                        style="Muted.TLabel", wraplength=700).grid(row=1, column=1, sticky="w", pady=5)
         self._label(self.direct_frame, "공통 아이디", 2)
-        self._entry(self.direct_frame, "camera_username", 2, "admin")
+        self._entry(self.direct_frame, "camera_username", 2, "")
         self._label(self.direct_frame, "공통 비밀번호", 3)
         self._entry(self.direct_frame, "camera_password", 3, show="•")
         self.camera_password_note = self.tk.StringVar(self.root, "카메라에 설정된 비밀번호를 입력하세요.")
@@ -6140,8 +7873,18 @@ class RecorderDesktopApp:
         self._label(fields, "파일명 날씨 표시", 7)
         self._entry(fields, "weather", 7)
         self.ttk.Label(fields, text="수동 표시용 이름입니다. 자동 예보 조건은 시간표·날씨에서 설정하세요.", style="Muted.TLabel").grid(row=8, column=1, sticky="w")
-        self._label(fields, "파일 분할 (분)", 9)
-        self.ttk.Combobox(fields, textvariable=self._var("segment_minutes", "30"), values=("5", "10", "30", "60"), width=12).grid(row=9, column=1, sticky="w", pady=5)
+        self._label(fields, "녹화 파일 저장 방식", 9)
+        mode_frame = self.ttk.Frame(fields)
+        mode_frame.grid(row=9, column=1, columnspan=2, sticky="w", pady=5)
+        mode_box = self.ttk.Combobox(mode_frame, textvariable=self._var("recording_mode", "예약 구간 전체 한 파일"),
+                                    values=("예약 구간 전체 한 파일", "일정 간격으로 분할"), state="readonly", width=25)
+        mode_box.pack(side="left")
+        mode_box.bind("<<ComboboxSelected>>", lambda _event: self._recording_mode_fields())
+        self.segment_box = self.ttk.Combobox(mode_frame, textvariable=self._var("segment_minutes", "30"),
+                                             values=("5", "10", "30", "60"), width=6)
+        self.segment_box.pack(side="left", padx=(12, 4))
+        self.ttk.Label(mode_frame, text="분 (분할 모드만)", style="Muted.TLabel").pack(side="left")
+        self._recording_mode_fields()
         self._label(fields, "자동 삭제 기준 (일)", 10)
         self._entry(fields, "retention_days", 10, "0", width=12).grid_configure(sticky="w")
         self.ttk.Label(fields, text="0이면 자동 삭제하지 않습니다. 1 이상이면 보관 기간이 지난 녹화 파일을 삭제합니다.", style="Muted.TLabel", wraplength=740).grid(row=11, column=1, sticky="w")
@@ -6156,6 +7899,10 @@ class RecorderDesktopApp:
         self.ttk.Label(parent, text="현재 설정 파일\n" + str(self.controller.config_path), wraplength=950,
                        style="Muted.TLabel").grid(row=8, column=0, sticky="w", pady=(20, 0))
         self._camera_mode_fields()
+
+    def _recording_mode_fields(self):
+        mode = self.form["recording_mode"].get()
+        self.segment_box.configure(state="normal" if mode == "일정 간격으로 분할" else "disabled")
 
     def _camera_mode_id(self):
         value = self.form["camera_mode"].get()
@@ -6275,6 +8022,7 @@ class RecorderDesktopApp:
             })
         values["time_ranges"] = [start.get().strip() + "-" + end.get().strip() for _, start, end in self.rows]
         values["recording_dates"] = desktop_dates(self.form["recording_dates"].get())
+        values["recording_mode"] = "split" if self.form["recording_mode"].get() == "일정 간격으로 분할" else "window"
         for name, label, integer in (("segment_minutes", "파일 분할 길이", False), ("retention_days", "보관 일수", True),
                                      ("min_free_gb", "최소 여유 공간", False)):
             values[name] = desktop_number(self.form[name].get(), label, integer)
@@ -6294,13 +8042,16 @@ class RecorderDesktopApp:
             for key, default in (("setup_ini", "auto"), ("output_dir", "auto"), ("intersection_name", ""), ("weather", ""),
                                  ("segment_minutes", 30), ("retention_days", 0), ("min_free_gb", 5)):
                 self.form[key].set(str(config.get(key, default)))
+            recording_mode = config.get("recording_mode", "split" if "segment_minutes" in config or "segment_seconds" in config else "window")
+            self.form["recording_mode"].set("일정 간격으로 분할" if recording_mode == "split" else "예약 구간 전체 한 파일")
+            self._recording_mode_fields()
             connection = config.get("camera_connection") or {"mode": "setup"}
             mode = connection.get("mode", "setup")
             self.camera_mode_box.configure(values=[label for key, label in DESKTOP_CAMERA_MODES
                                                    if key != "custom" or mode == "custom"])
             self.form["camera_mode"].set(next((label for key, label in DESKTOP_CAMERA_MODES if key == mode),
                                               DESKTOP_CAMERA_MODES[0][1]))
-            for key, default in (("ips", ""), ("username", "admin"), ("port", 554), ("path", "/profile2/media.smp")):
+            for key, default in (("ips", ""), ("username", ""), ("port", 554), ("path", "/profile2/media.smp")):
                 self.form["camera_" + key].set(str(connection.get(key, default)))
             self.form["camera_password"].set("")
             self.camera_ips.delete("1.0", "end")
@@ -6340,7 +8091,7 @@ class RecorderDesktopApp:
                 # form instead of trapping the user behind a failed first load.
                 self.baseline = {key: value for key, value in config.items() if key in (
                     "setup_ini", "output_dir", "intersection_name", "weather", "recording_dates", "time_ranges",
-                    "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection")}
+                    "recording_mode", "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection")}
             self.loaded, self.dirty = True, False
             self.dirty_text.set("변경 사항을 저장했습니다.")
         finally:
@@ -6351,7 +8102,12 @@ class RecorderDesktopApp:
             return
         def done(value):
             self._load(value)
-            self.notice.set("카메라 설정과 저장 위치를 확인하고 5분 시험 녹화를 시작하세요." if initial else "저장된 설정을 불러왔습니다.")
+            if value.get("setup_required"):
+                self.notice.set(value.get("setup_message") or "카메라 연결 정보를 먼저 등록하세요. 날씨 기능을 사용할 때는 지역도 직접 선택하세요.")
+                if initial:
+                    self.notebook.select(self.device_tab.master.master)
+            else:
+                self.notice.set("카메라 설정과 저장 위치를 확인하고 시험 녹화를 시작하세요." if initial else "저장된 설정을 불러왔습니다.")
             self._request_state()
         self.action(self.controller.configuration, done, "설정을 불러오고 있습니다.")
 
@@ -6526,7 +8282,7 @@ class RecorderDesktopApp:
         running = self.last_state.get("running", False)
         external = self.last_state.get("external_running", False)
         for button in (self.start_button, self.once_button):
-            button.state(["disabled"] if running or external else ["!disabled"])
+            button.state(["disabled"] if running or external or self.last_state.get("setup_required") else ["!disabled"])
         self.stop_button.state(["!disabled"] if running else ["disabled"])
         self._once_mode()
 
@@ -6539,6 +8295,8 @@ class RecorderDesktopApp:
             label = "녹화 중 · {}대".format(len(active))
         elif running:
             label = "한 번 녹화 준비 · 대기" if state.get("mode") == "once" else "예약 녹화 대기 중"
+        elif state.get("setup_required"):
+            label = "카메라 등록 필요"
         else:
             label = "녹화 중지"
         self.state_text.set(label)
@@ -6679,6 +8437,8 @@ def main(argv=None):
                         help="Shared hours per start (default: 2 with custom --start-times)")
     parser.add_argument("--record-minutes", type=float, metavar="MINUTES",
                         help="Record once for this many minutes, then exit; overrides configured dates/time ranges")
+    parser.add_argument("--record-camera", metavar="CAMERA_NAME",
+                        help="With --record-minutes, record only this saved camera; leaves configuration unchanged")
     parser.add_argument("--start-at", metavar="HH:MM",
                         help="With --record-minutes, start once at this future Korean time today (default: now)")
     parser.add_argument("--output-dir", type=Path, help="Storage path (default: project's runtime/scheduled_recordings)")
@@ -6703,13 +8463,23 @@ def main(argv=None):
     operation.add_argument("--uninstall", action="store_true", help="Stop/remove the managed service; preserve recordings")
     operation.add_argument("--desktop-install", action="store_true",
                            help="Add ED Camera Recorder to the current user's Linux application menu; no sudo")
+    parser.add_argument("--recording-mode", choices=("window", "split"),
+                        help="window: one MP4 per recording window (new default); split: periodic MP4 files")
     parser.add_argument("--segment-minutes", type=float,
-                        help="Override MP4 file split interval in minutes for this run (e.g. 30 or 60)")
+                        help="Set split interval and opt into split mode unless --recording-mode is also given")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     storage, recorder, weather_gate = None, None, None
     exit_status = 0
     try:
+        if args.record_camera is not None:
+            if args.record_minutes is None:
+                raise ValueError("--record-camera requires --record-minutes")
+            if any((args.gui, args.ui, args.ui_autostart, args.install, args.uninstall, args.print_unit,
+                    args.init_config, args.desktop_install, args.camera_profiles, args.apply_camera_profiles)):
+                raise ValueError("개별 녹화는 웹 화면의 '한 번만 녹화 → 녹화 대상'에서 선택하세요. "
+                                 "명령줄에서는 실행.sh 대신 python3 record.py --config recording.json "
+                                 "--record-minutes 1 --record-camera 카메라명으로 실행하세요.")
         if args.apply_camera_profiles and not args.camera_profiles:
             raise ValueError("--apply-camera-profiles에는 --camera-profiles 카메라명이 필요합니다.")
         if args.camera_profiles:
@@ -6717,7 +8487,7 @@ def main(argv=None):
                     args.init_config, args.check, args.desktop_install)) or any(value is not None for value in
                     (args.setup_ini, args.cameras, args.time_ranges, args.start_times, args.duration_hours,
                      args.record_minutes, args.start_at, args.output_dir, args.retention_days,
-                     args.min_free_gb, args.ffmpeg, args.user, args.segment_minutes)):
+                     args.min_free_gb, args.ffmpeg, args.user, args.segment_minutes, args.recording_mode)):
                 raise ValueError("카메라 프로필 명령은 --config와 함께 별도로 실행하세요.")
             camera_config = args.config or Path(__file__).resolve().with_name("recording.json")
             result = camera_profiles_cli(camera_config, args.camera_profiles, apply=args.apply_camera_profiles)
@@ -6728,7 +8498,7 @@ def main(argv=None):
                          args.init_config, args.check)
             overrides = (args.setup_ini, args.cameras, args.time_ranges, args.start_times, args.duration_hours,
                          args.record_minutes, args.start_at, args.output_dir, args.retention_days,
-                         args.min_free_gb, args.ffmpeg, args.user, args.segment_minutes)
+                         args.min_free_gb, args.ffmpeg, args.user, args.segment_minutes, args.recording_mode)
             if any(conflicts) or any(value is not None for value in overrides):
                 raise ValueError("--gui/--desktop-install은 --config recording.json과 함께 사용하세요. 녹화 옵션은 화면에서 설정합니다.")
             gui_path = (Path(args.config).expanduser().absolute() if args.config
@@ -6790,7 +8560,8 @@ def main(argv=None):
             return 0
         standalone_flags = (args.setup_ini, args.cameras, args.time_ranges, args.start_times, args.duration_hours,
                             args.output_dir, args.retention_days, args.min_free_gb, args.ffmpeg)
-        has_runtime_options = any(value is not None for value in standalone_flags) or args.segment_minutes is not None
+        has_runtime_options = (any(value is not None for value in standalone_flags)
+                               or args.segment_minutes is not None or args.recording_mode is not None)
         config_path = Path(args.config).expanduser().absolute() if args.config else default_ini_path()
         ini_mode = (config_path.suffix.lower() == ".ini" and
                     (args.config is not None or config_path.exists() or config_path.is_symlink() or args.install))
@@ -6808,7 +8579,7 @@ def main(argv=None):
             # First-install CLI choices were written into the new INI. The unit
             # must only reference the file so future edits are read on restart.
             for key in ("setup_ini", "cameras", "time_ranges", "start_times", "duration_hours",
-                        "output_dir", "retention_days", "min_free_gb", "ffmpeg", "segment_minutes"):
+                        "output_dir", "retention_days", "min_free_gb", "ffmpeg", "segment_minutes", "recording_mode"):
                 setattr(args, key, None)
             has_runtime_options = False
         if ini_mode:
@@ -6827,9 +8598,14 @@ def main(argv=None):
             settings, setup_path = standalone_settings(args)
             LOG.info("Camera setup: %s", setup_path)
         if args.segment_minutes is not None:
-            settings = replace(settings, segment_seconds=minutes_to_seconds(args.segment_minutes))
+            settings = replace(settings, segment_seconds=minutes_to_seconds(args.segment_minutes),
+                               recording_mode=args.recording_mode or "split")
+        if args.recording_mode is not None:
+            settings = replace(settings, recording_mode=args.recording_mode)
         if once_window:
             settings = replace(settings, once_window=once_window)
+        if args.record_camera is not None:
+            settings = select_once_camera(settings, args.record_camera)
         if args.install or args.print_unit:
             user = install_user or resolve_service_user(args.user)
             runtime_args = (["--config", str(config_path.resolve())] if ini_mode
@@ -6849,10 +8625,10 @@ def main(argv=None):
         executable, timeout_option = check_ffmpeg(settings)
         if args.check:
             LOG.info("Configuration OK: cameras=%s, daily schedules=%d, recording_dates=%s, timezone=Asia/Seoul, "
-                     "format=MP4, segment_minutes=%g, output=%s",
+                     "format=MP4, recording_mode=%s, segment_minutes=%g, output=%s",
                      ",".join(camera.name for camera in settings.cameras), len(settings.schedules),
                      ",".join(day.isoformat() for day in settings.recording_dates) or "every day",
-                     settings.segment_seconds / 60, settings.output_dir)
+                     settings.recording_mode, settings.segment_seconds / 60, settings.output_dir)
             for camera in settings.cameras:
                 LOG.info("%s: filename prefix=%s", camera.name, camera_filename_prefix(camera))
             if settings.once_window:
@@ -6882,10 +8658,10 @@ def main(argv=None):
             weather_gate.start()
         recorder = Recorder(settings, executable, timeout_option, storage, weather_gate=weather_gate)
         LOG.info("Recorder started: %d cameras; all schedules use Asia/Seoul; "
-                 "recording_dates=%s; format=MP4, segment_minutes=%g", len(settings.cameras),
+                 "recording_dates=%s; format=MP4, recording_mode=%s, segment_minutes=%g", len(settings.cameras),
                  "one-time window" if settings.once_window else (
                      ",".join(day.isoformat() for day in settings.recording_dates) or "every day"),
-                 settings.segment_seconds / 60)
+                 settings.recording_mode, settings.segment_seconds / 60)
         while not stop.is_set():
             recorder.tick()
             write_recorder_status(settings, recorder, weather_gate)

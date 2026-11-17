@@ -1,30 +1,32 @@
 {
-  "version": "2026-11-06-v2.3",
-  "validation_date_kst": "2026-11-06",
+  "version": "2026-11-17-v2.4",
+  "validation_date_kst": "2026-11-17",
   "environment": "Ubuntu 26.04 x86_64, Python 3.14, Tk 8.6; native Linux temporary filesystem",
   "unit_tests": {
-    "run": 400,
+    "run": 465,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
   "actual_tk_tests_enabled": true,
-  "first_launch_without_config_verified": true,
+  "first_launch_blank_camera_account_region": true,
+  "unconfigured_recording_blocked": true,
   "existing_config_bytes_preserved": true,
-  "bundled_ffmpeg_config_check_passed": true,
+  "legacy_split_mode_preserved": true,
+  "bundled_ffmpeg_config_check_passed_after_manual_registration": true,
   "camera_connection_attempted": false,
+  "switch_connection_attempted": false,
   "real_camera_recording_retested": false,
   "system_service_changed": false,
   "network_configuration_changed": false,
-  "elapsed_seconds": 20.87,
-  "recorder_sha256": "fdd39183780e736983dc9cd72b18f377ecd431e50d5db89655864851b34e8bc9",
-  "test_logs_include": "Temporary mock-camera and localhost HTTP tests only; no real camera footage.",
+  "elapsed_seconds": 23.03,
+  "recorder_sha256": "acda17d2c7517c97c968652bb4c441caf21900e8f5ae521dae45d9c9b3b70a2d",
   "browser_ui": {
-    "mock_camera_profile_read_plan_apply": true,
-    "mock_recording_url_switch_to_profile4": true,
-    "mock_ping_history_rendered": true,
+    "blank_initial_fields_verified": true,
+    "manual_camera_registration_saved": true,
+    "region_required_only_for_weather": true,
+    "manual_region_preserved": true,
     "javascript_errors": 0,
-    "real_camera_access": false,
-    "live_camera_video_retested": false
+    "real_device_access": false
   }
 }

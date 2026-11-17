@@ -20,6 +20,11 @@ __pycache__/
 .recording-profile-backup_*.json
 .recorder-init-*
 .recorder-save-*
+switches.json
+switch_backups/
+snapshots/
+.window-snapshot-switch-backup_*/
+.window-snapshot-switch-update.lock
 *.mp4
 *.mkv
 *.log

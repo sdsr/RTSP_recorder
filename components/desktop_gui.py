@@ -372,10 +372,10 @@ class RecorderDesktopApp:
                                       font=(self.font_family, 11), background="#ffffff", foreground="#1d304a")
         self.camera_ips.grid(row=0, column=1, sticky="ew", pady=5)
         self.camera_ips.bind("<<Modified>>", self._camera_ips_changed)
-        self.ttk.Label(self.direct_frame, text="예: 169.254.130.12, 169.254.130.13\n한 줄에 하나씩 또는 쉼표로 구분하세요. 입력한 카메라를 모두 녹화합니다.",
+        self.ttk.Label(self.direct_frame, text="카메라의 실제 IPv4 주소를 한 줄에 하나씩 또는 쉼표로 구분해 입력하세요. 입력한 카메라를 모두 녹화합니다.",
                        style="Muted.TLabel", wraplength=700).grid(row=1, column=1, sticky="w", pady=5)
         self._label(self.direct_frame, "공통 아이디", 2)
-        self._entry(self.direct_frame, "camera_username", 2, "admin")
+        self._entry(self.direct_frame, "camera_username", 2, "")
         self._label(self.direct_frame, "공통 비밀번호", 3)
         self._entry(self.direct_frame, "camera_password", 3, show="•")
         self.camera_password_note = self.tk.StringVar(self.root, "카메라에 설정된 비밀번호를 입력하세요.")
@@ -404,8 +404,18 @@ class RecorderDesktopApp:
         self._label(fields, "파일명 날씨 표시", 7)
         self._entry(fields, "weather", 7)
         self.ttk.Label(fields, text="수동 표시용 이름입니다. 자동 예보 조건은 시간표·날씨에서 설정하세요.", style="Muted.TLabel").grid(row=8, column=1, sticky="w")
-        self._label(fields, "파일 분할 (분)", 9)
-        self.ttk.Combobox(fields, textvariable=self._var("segment_minutes", "30"), values=("5", "10", "30", "60"), width=12).grid(row=9, column=1, sticky="w", pady=5)
+        self._label(fields, "녹화 파일 저장 방식", 9)
+        mode_frame = self.ttk.Frame(fields)
+        mode_frame.grid(row=9, column=1, columnspan=2, sticky="w", pady=5)
+        mode_box = self.ttk.Combobox(mode_frame, textvariable=self._var("recording_mode", "예약 구간 전체 한 파일"),
+                                    values=("예약 구간 전체 한 파일", "일정 간격으로 분할"), state="readonly", width=25)
+        mode_box.pack(side="left")
+        mode_box.bind("<<ComboboxSelected>>", lambda _event: self._recording_mode_fields())
+        self.segment_box = self.ttk.Combobox(mode_frame, textvariable=self._var("segment_minutes", "30"),
+                                             values=("5", "10", "30", "60"), width=6)
+        self.segment_box.pack(side="left", padx=(12, 4))
+        self.ttk.Label(mode_frame, text="분 (분할 모드만)", style="Muted.TLabel").pack(side="left")
+        self._recording_mode_fields()
         self._label(fields, "자동 삭제 기준 (일)", 10)
         self._entry(fields, "retention_days", 10, "0", width=12).grid_configure(sticky="w")
         self.ttk.Label(fields, text="0이면 자동 삭제하지 않습니다. 1 이상이면 보관 기간이 지난 녹화 파일을 삭제합니다.", style="Muted.TLabel", wraplength=740).grid(row=11, column=1, sticky="w")
@@ -420,6 +430,10 @@ class RecorderDesktopApp:
         self.ttk.Label(parent, text="현재 설정 파일\n" + str(self.controller.config_path), wraplength=950,
                        style="Muted.TLabel").grid(row=8, column=0, sticky="w", pady=(20, 0))
         self._camera_mode_fields()
+
+    def _recording_mode_fields(self):
+        mode = self.form["recording_mode"].get()
+        self.segment_box.configure(state="normal" if mode == "일정 간격으로 분할" else "disabled")
 
     def _camera_mode_id(self):
         value = self.form["camera_mode"].get()
@@ -539,6 +553,7 @@ class RecorderDesktopApp:
             })
         values["time_ranges"] = [start.get().strip() + "-" + end.get().strip() for _, start, end in self.rows]
         values["recording_dates"] = desktop_dates(self.form["recording_dates"].get())
+        values["recording_mode"] = "split" if self.form["recording_mode"].get() == "일정 간격으로 분할" else "window"
         for name, label, integer in (("segment_minutes", "파일 분할 길이", False), ("retention_days", "보관 일수", True),
                                      ("min_free_gb", "최소 여유 공간", False)):
             values[name] = desktop_number(self.form[name].get(), label, integer)
@@ -558,13 +573,16 @@ class RecorderDesktopApp:
             for key, default in (("setup_ini", "auto"), ("output_dir", "auto"), ("intersection_name", ""), ("weather", ""),
                                  ("segment_minutes", 30), ("retention_days", 0), ("min_free_gb", 5)):
                 self.form[key].set(str(config.get(key, default)))
+            recording_mode = config.get("recording_mode", "split" if "segment_minutes" in config or "segment_seconds" in config else "window")
+            self.form["recording_mode"].set("일정 간격으로 분할" if recording_mode == "split" else "예약 구간 전체 한 파일")
+            self._recording_mode_fields()
             connection = config.get("camera_connection") or {"mode": "setup"}
             mode = connection.get("mode", "setup")
             self.camera_mode_box.configure(values=[label for key, label in DESKTOP_CAMERA_MODES
                                                    if key != "custom" or mode == "custom"])
             self.form["camera_mode"].set(next((label for key, label in DESKTOP_CAMERA_MODES if key == mode),
                                               DESKTOP_CAMERA_MODES[0][1]))
-            for key, default in (("ips", ""), ("username", "admin"), ("port", 554), ("path", "/profile2/media.smp")):
+            for key, default in (("ips", ""), ("username", ""), ("port", 554), ("path", "/profile2/media.smp")):
                 self.form["camera_" + key].set(str(connection.get(key, default)))
             self.form["camera_password"].set("")
             self.camera_ips.delete("1.0", "end")
@@ -604,7 +622,7 @@ class RecorderDesktopApp:
                 # form instead of trapping the user behind a failed first load.
                 self.baseline = {key: value for key, value in config.items() if key in (
                     "setup_ini", "output_dir", "intersection_name", "weather", "recording_dates", "time_ranges",
-                    "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection")}
+                    "recording_mode", "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection")}
             self.loaded, self.dirty = True, False
             self.dirty_text.set("변경 사항을 저장했습니다.")
         finally:
@@ -615,7 +633,12 @@ class RecorderDesktopApp:
             return
         def done(value):
             self._load(value)
-            self.notice.set("카메라 설정과 저장 위치를 확인하고 5분 시험 녹화를 시작하세요." if initial else "저장된 설정을 불러왔습니다.")
+            if value.get("setup_required"):
+                self.notice.set(value.get("setup_message") or "카메라 연결 정보를 먼저 등록하세요. 날씨 기능을 사용할 때는 지역도 직접 선택하세요.")
+                if initial:
+                    self.notebook.select(self.device_tab.master.master)
+            else:
+                self.notice.set("카메라 설정과 저장 위치를 확인하고 시험 녹화를 시작하세요." if initial else "저장된 설정을 불러왔습니다.")
             self._request_state()
         self.action(self.controller.configuration, done, "설정을 불러오고 있습니다.")
 
@@ -790,7 +813,7 @@ class RecorderDesktopApp:
         running = self.last_state.get("running", False)
         external = self.last_state.get("external_running", False)
         for button in (self.start_button, self.once_button):
-            button.state(["disabled"] if running or external else ["!disabled"])
+            button.state(["disabled"] if running or external or self.last_state.get("setup_required") else ["!disabled"])
         self.stop_button.state(["!disabled"] if running else ["disabled"])
         self._once_mode()
 
@@ -803,6 +826,8 @@ class RecorderDesktopApp:
             label = "녹화 중 · {}대".format(len(active))
         elif running:
             label = "한 번 녹화 준비 · 대기" if state.get("mode") == "once" else "예약 녹화 대기 중"
+        elif state.get("setup_required"):
+            label = "카메라 등록 필요"
         else:
             label = "녹화 중지"
         self.state_text.set(label)

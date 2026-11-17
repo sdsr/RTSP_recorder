@@ -1,0 +1,229 @@
+{
+  "release_version": "2026-11-17-v2.4",
+  "patch_version": "2026-11-17-window-snapshot-switch",
+  "payload_sha256": "ae22c970ca5ba2972f3cdf8566d1ce16c3f88ee73c9d5af93884475bdcc5cae6",
+  "files": [
+    {
+      "name": "record.py",
+      "bytes": 517987,
+      "current_sha256": "fdd39183780e736983dc9cd72b18f377ecd431e50d5db89655864851b34e8bc9",
+      "payload_sha256": "5be91a4aba1325f200226e466068e0ae37e2479e27cadaf591efa49010908e36",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "086fb88d8eb13b45bb18c54fe967d92ae27ceef25e9c5c50844f0692f04aba33",
+        "24a91a11a6ed50a2cb2c968ab5eef8ac1ad2c486dddf43cc9e52b4acd630585f",
+        "5be91a4aba1325f200226e466068e0ae37e2479e27cadaf591efa49010908e36",
+        "64dfbc68ded99cbdbb2dc8591838324c86f1c946079aa5a8837b3c26d898197c",
+        "bb9dee97a1e5b70b6ee9b7ff9620d75157dbec6b5ba56b4d822d827261fd4ec9",
+        "bd35bc5966fc264682bae2a478ed76bdae00db993c16613bee707033c43ee678",
+        "e04c1ba67ff4d9a219b2a3a3d142f4855e29ff394596d268fa2bb60878f70637"
+      ]
+    },
+    {
+      "name": "ui.html",
+      "bytes": 115537,
+      "current_sha256": "5c292b31dc7f3c6603ccd5c7a27f0a7adb593b213847b73cc231afc8262708cc",
+      "payload_sha256": "2be5df67485b4d7bcf72551f0916ab31145cccb0678efb8830ae88a192751fa9",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "2be5df67485b4d7bcf72551f0916ab31145cccb0678efb8830ae88a192751fa9",
+        "487bb9af0d9edf3ac205381fb23e2341f99d57f1f4ba95ec21041da34394e232",
+        "5c292b31dc7f3c6603ccd5c7a27f0a7adb593b213847b73cc231afc8262708cc",
+        "672befcd139ef53f41896210ece519fe78e9470c2a4520eccbd8bd8b2ab719b0",
+        "b892491a2be878107508367adcd837a263d1603282c8897552c8da17e70d6ba3"
+      ]
+    },
+    {
+      "name": "build_embedded.py",
+      "bytes": 1986,
+      "current_sha256": "904153666fcc666463485b43edf151d0a50325a2f24ab027ca59b6d542ec5c2c",
+      "payload_sha256": "f1fe1107fb28a6700f18d73dd5fef99d483ba72e5a0a07c42060caf627373096",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "904153666fcc666463485b43edf151d0a50325a2f24ab027ca59b6d542ec5c2c",
+        "c68628ab230802ce5194e672acd4a311e3e637b1b434b0d3976b65caf5d37826",
+        "f1fe1107fb28a6700f18d73dd5fef99d483ba72e5a0a07c42060caf627373096"
+      ]
+    },
+    {
+      "name": "components/ui_server.py",
+      "bytes": 80286,
+      "current_sha256": "f748eb543dcdf818750c85ffdce8db63d877ffb0dd39a3ad2786aee1458c0e6f",
+      "payload_sha256": "bf502bf4c1d6dd2a54be6331d8cdbb441bedfcd2b9fce14704a37ebf3f2d2c2d",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "3142b56da67ed9045c409f4352dc9dd2d22c0430e557ca35de34de411e5588f6",
+        "5e8a7e884e1a0e3a6eb35300930169a253665b87c7e6a4ffc608990618bd05ab",
+        "86410c75b4d63d15775af56be669d89840875ebe5e0c3d1710bf57ab9be951b4",
+        "bf502bf4c1d6dd2a54be6331d8cdbb441bedfcd2b9fce14704a37ebf3f2d2c2d",
+        "f862f6d8fc439b5d4dda83b440e3e0e3aaa28362410f7aede50325fa4661cfb6"
+      ]
+    },
+    {
+      "name": "components/desktop_gui.py",
+      "bytes": 55909,
+      "current_sha256": "b5a6f642bf4833be5f11e3948d68ed333ca871fce2ed32399b79f8be38c835d6",
+      "payload_sha256": "193a6382ca98fe30cc60771ead5ae5f5fcb74951af5489638085d0aff87bcb1c",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "193a6382ca98fe30cc60771ead5ae5f5fcb74951af5489638085d0aff87bcb1c",
+        "b5a6f642bf4833be5f11e3948d68ed333ca871fce2ed32399b79f8be38c835d6",
+        "ccfac9835369f697baf2bc1d527a498ec70be24d11c6c6b52432e136658e7070"
+      ]
+    },
+    {
+      "name": "components/live_view.py",
+      "bytes": 15964,
+      "current_sha256": "76150b2072bad3b1e73fa6d3c86bf06148a73155823347ac8c96356c0b02595f",
+      "payload_sha256": "5ade6bf0d48a546dcddb53dc365f7c5dfd9ff158a63724f69372502229fb72a9",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "5ade6bf0d48a546dcddb53dc365f7c5dfd9ff158a63724f69372502229fb72a9"
+      ]
+    },
+    {
+      "name": "components/camera_profiles.py",
+      "bytes": 26896,
+      "current_sha256": "2d586be6a8d40966595b1d20eb7f9b14df0158f81aca1dcf029a214ccbd46dc2",
+      "payload_sha256": "229ffeae65107c94565f0f9e099cebf8b740245b17438e0a0f0e018a6a443605",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "229ffeae65107c94565f0f9e099cebf8b740245b17438e0a0f0e018a6a443605"
+      ]
+    },
+    {
+      "name": "components/camera_ping.py",
+      "bytes": 15338,
+      "current_sha256": "bde8ecd25b2cb00fb6f2883a794f03bbd3ea3d5f9cc5212fea80d65147adb6bf",
+      "payload_sha256": "a10e38bc224aa73ee35a54d67f4d283fbe7d0411552363ca7fda2f25ce79409e",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "a10e38bc224aa73ee35a54d67f4d283fbe7d0411552363ca7fda2f25ce79409e"
+      ]
+    },
+    {
+      "name": "components/weather.py",
+      "bytes": 19763,
+      "current_sha256": "ca4b5c756b9ccf69647dc053f02f139b87c6f0455f76547c501bf84ae143ec4b",
+      "payload_sha256": "ca4b5c756b9ccf69647dc053f02f139b87c6f0455f76547c501bf84ae143ec4b",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "ca4b5c756b9ccf69647dc053f02f139b87c6f0455f76547c501bf84ae143ec4b"
+      ]
+    },
+    {
+      "name": "components/public_weather.py",
+      "bytes": 17872,
+      "current_sha256": "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a",
+      "payload_sha256": "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a"
+      ]
+    },
+    {
+      "name": "components/desktop_launcher.py",
+      "bytes": 4736,
+      "current_sha256": "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075",
+      "payload_sha256": "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075"
+      ]
+    },
+    {
+      "name": "components/camera_snapshots.py",
+      "bytes": 22892,
+      "current_sha256": null,
+      "payload_sha256": "6dd9878009c8b1f3c8a322448c60262823c824fa53b48b82ca298e731c4f4be5",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "6dd9878009c8b1f3c8a322448c60262823c824fa53b48b82ca298e731c4f4be5"
+      ]
+    },
+    {
+      "name": "components/switch_manager.py",
+      "bytes": 51247,
+      "current_sha256": null,
+      "payload_sha256": "7770fef11049003df23645c4b57871712b1c0430dfc81d1a72f11b1b6fd21fa2",
+      "known_base_matches": false,
+      "known_base_sha256": [
+        "7770fef11049003df23645c4b57871712b1c0430dfc81d1a72f11b1b6fd21fa2"
+      ]
+    },
+    {
+      "name": "recording.portable.example.json",
+      "bytes": 478,
+      "current_sha256": "7f705df451a749f09d8a5bd22e86ab848d9f101b447f184ad6db2464ad8e7886",
+      "payload_sha256": "34e06f44a5335364a2f01c1a44d4a3c28ff1f9fabd1e1d2b497a37be56d8a1eb",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "7f705df451a749f09d8a5bd22e86ab848d9f101b447f184ad6db2464ad8e7886"
+      ]
+    },
+    {
+      "name": "recording.example.json",
+      "bytes": 749,
+      "current_sha256": "aecbd07cfc0688ac8637705ed9ee43003352047044d1d3a2d541433fd8dc4634",
+      "payload_sha256": "0cdb928f493cc9eb347d9beef55b3e1b2e53582d1932622f2a0dbb3900861eb3",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "aecbd07cfc0688ac8637705ed9ee43003352047044d1d3a2d541433fd8dc4634"
+      ]
+    },
+    {
+      "name": "recording.weather.example.json",
+      "bytes": 692,
+      "current_sha256": "fbf56f47b2a644850f77c806ab4b6aa40d19757f96f6f97f58b708ca2bc085a7",
+      "payload_sha256": "a210ef2aa66146135ea392facc8da27811cef9b5180fe3d293d86de088155771",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "fbf56f47b2a644850f77c806ab4b6aa40d19757f96f6f97f58b708ca2bc085a7"
+      ]
+    },
+    {
+      "name": "recording.example.ini",
+      "bytes": 1178,
+      "current_sha256": "9d47a897125d036b0cbcb8f708cab671297a02b070262383254b834e68fe95f5",
+      "payload_sha256": "5aea1aa88e966c06163111baad3da472ca0e2ed7e0da3f4136425201185973af",
+      "known_base_matches": true,
+      "known_base_sha256": [
+        "9d47a897125d036b0cbcb8f708cab671297a02b070262383254b834e68fe95f5"
+      ]
+    }
+  ],
+  "merge_notes": [
+    "Retained prior live/profile/ping fixes instead of reverting to their original v5 copies.",
+    "Three-way merged UI controller to preserve settings cache lock and closing guard.",
+    "Retained legacy filename host ambiguity guard."
+  ],
+  "network_devices_modified_during_update": false,
+  "first_run_policy": "New JSON configurations contain no camera/IP/account or geographic selection; existing runtime settings are preserved.",
+  "configuration_policy": "Unlike the supplied standalone updater, integration preserves existing recording.json bytes. New installations default to window; legacy split settings remain until the operator changes mode.",
+  "integration_fixes": [
+    "Preserve v2.3 lifecycle/cache/privacy fixes",
+    "Blank first-run camera/account/region with explicit registration",
+    "Block unconfigured recording and forecast access",
+    "Keep PNG on metadata-write failure and reject unsupported OS operations",
+    "Validate malformed switch config/requests and tolerate socket-close race"
+  ],
+  "installed_sha256": {
+    "record.py": "acda17d2c7517c97c968652bb4c441caf21900e8f5ae521dae45d9c9b3b70a2d",
+    "ui.html": "7d2eeabf5f0d48786c764636609500d5caa361edda123966fade6fe56d2a72a4",
+    "build_embedded.py": "f1fe1107fb28a6700f18d73dd5fef99d483ba72e5a0a07c42060caf627373096",
+    "components/ui_server.py": "e9e0bfec8c2ed98a407724cb7f5f73dc18dacafc61ffb03758911763f9fb6eb8",
+    "components/desktop_gui.py": "da7b5165ec577c2fc93dbbe156b6045a22bdc145a16bbef68d51698861709fa9",
+    "components/live_view.py": "76150b2072bad3b1e73fa6d3c86bf06148a73155823347ac8c96356c0b02595f",
+    "components/camera_profiles.py": "2d586be6a8d40966595b1d20eb7f9b14df0158f81aca1dcf029a214ccbd46dc2",
+    "components/camera_ping.py": "bde8ecd25b2cb00fb6f2883a794f03bbd3ea3d5f9cc5212fea80d65147adb6bf",
+    "components/weather.py": "812b1d19b2ec97067a63d220bcbe46811d0fa367c448aa9bec9fb71565016344",
+    "components/public_weather.py": "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a",
+    "components/desktop_launcher.py": "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075",
+    "components/camera_snapshots.py": "9150be22b6595d572546c98603cf8a5b289165d3a8443e357dc48045457cc917",
+    "components/switch_manager.py": "4a9e74fd55d329ca6e01440400e666246fee34c914c0491ea98bbe6768b9bf20",
+    "recording.portable.example.json": "19c9db97b879fb7592334acc22add15d380560d18f7eee2c55368e3f76f74cd8",
+    "recording.example.json": "1851ec42626652038c5d325654dd2f8f81c1bfd5ba7981294b13c5813c5273ec",
+    "recording.weather.example.json": "3626721f7473142f5f657d5125649fd7aed0c5c149157279f1b42bc0c8ad321a",
+    "recording.example.ini": "5aea1aa88e966c06163111baad3da472ca0e2ed7e0da3f4136425201185973af"
+  }
+}

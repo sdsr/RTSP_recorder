@@ -1,11 +1,6 @@
 {
   "output_dir": "./recordings",
-  "cameras": [
-    {
-      "name": "camera_12",
-      "url": "rtsp://admin@169.254.130.12:554/profile2/media.smp"
-    }
-  ],
+  "cameras": [],
   "time_ranges": [
     "06:30-07:30",
     "10:00-11:00",
@@ -13,11 +8,28 @@
     "17:00-18:00",
     "21:00-22:00"
   ],
+  "recording_mode": "window",
   "segment_minutes": 5,
   "retention_days": 0,
   "min_free_gb": 5,
   "ffmpeg": "./bin/ffmpeg",
   "reconnect_seconds": 10,
   "stall_seconds": 30,
-  "recording_dates": []
+  "recording_dates": [],
+  "intersection_name": "",
+  "weather_condition": {
+    "enabled": false,
+    "conditions": [
+      "rain"
+    ],
+    "provider": "open_meteo",
+    "poll_minutes": 30,
+    "api_key_file": "kma_service.key",
+    "met_contact": "",
+    "region": {
+      "sido": "",
+      "sigungu": "",
+      "eupmyeondong": ""
+    }
+  }
 }

@@ -151,13 +151,14 @@ class JsonSettingsTests(unittest.TestCase):
         ffmpeg.assert_not_called()
         popen.assert_not_called()
         data = json.loads(original)
-        self.assertEqual((data["cameras"], data["setup_ini"], data["output_dir"]), ("auto", "auto", "auto"))
+        self.assertEqual((data["cameras"], data["setup_ini"], data["output_dir"]), ([], "auto", "./recordings"))
         self.assertEqual(data["recording_dates"], [])
         self.assertEqual(data["time_ranges"], list(record.DEFAULT_TIME_RANGES))
         self.assertEqual(data["intersection_name"], "")
         self.assertEqual(data["weather"], "")
-        with mock.patch.object(record, "find_setup_ini", return_value=self.setup):
-            self.assertEqual(record.load_settings(self.config).cameras[0].intersection, "기존교차로")
+        with mock.patch.object(record, "find_setup_ini") as find, self.assertRaises(ValueError):
+            record.load_settings(self.config)
+        find.assert_not_called()
 
     def test_generated_json_can_seed_existing_cli_options_without_reading_camera(self):
         options = argparse.Namespace(setup_ini=self.setup, output_dir=self.root / "ssd", cameras=["CAM2"],

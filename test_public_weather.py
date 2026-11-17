@@ -69,13 +69,14 @@ class PublicForecastTests(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         data = record.default_weather_config()
         data["enabled"] = True
+        data["region"] = {"sido": "부산광역시", "sigungu": "해운대구", "eupmyeondong": ""}
         self.condition = record.parse_weather_condition(data, self.root)
 
     def client(self, responses, condition=None):
         opener = mock.Mock(open=mock.Mock(side_effect=responses))
         return record.PublicWeatherClient(condition or self.condition, self.root, opener), opener
 
-    def test_default_is_keyless_open_meteo_with_real_region_coordinates(self):
+    def test_explicit_region_uses_keyless_open_meteo_with_real_coordinates(self):
         self.assertEqual(self.condition.provider, "open_meteo")
         self.assertEqual((self.condition.latitude, self.condition.longitude), (35.16, 129.1658))
         with mock.patch.object(record, "weather_api_key", side_effect=AssertionError("must not require a key")):

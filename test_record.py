@@ -34,6 +34,8 @@ def settings(output=None, schedules=None, **changes):
         cameras=(record.Camera("cam1", "rtsp://user:PRIVATE@192.0.2.1/stream"),),
         schedules=tuple(schedules or (record.Schedule(7, 0, timedelta(hours=2)),)),
         min_free_gb=0,
+        # These regressions exercise the legacy segmented recorder explicitly.
+        recording_mode="split",
     )
     return replace(value, **changes)
 

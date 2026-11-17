@@ -58,7 +58,7 @@ class WeatherCondition:
 
 
 def default_weather_config():
-    return {"enabled": False, "region": {"sido": "부산광역시", "sigungu": "해운대구", "eupmyeondong": ""},
+    return {"enabled": False, "region": {"sido": "", "sigungu": "", "eupmyeondong": ""},
             "conditions": ["rain"], "provider": "open_meteo", "api_key_file": "kma_service.key",
             "poll_minutes": 30, "met_contact": ""}
 
@@ -101,7 +101,13 @@ def parse_weather_condition(data, base):
                             latitude, longitude, contact)
 
 
+def validate_weather_region(condition):
+    if condition is None or not any(condition.region) or condition.nx <= 0 or condition.ny <= 0:
+        raise ValueError("날씨 예보를 사용하려면 시간표 · 날씨에서 지역을 먼저 선택하세요.")
+
+
 def validate_weather_access(condition):
+    validate_weather_region(condition)
     if condition.provider == "met_no":
         return met_user_agent(condition)
     if condition.provider == "open_meteo":
@@ -335,6 +341,9 @@ class WeatherGate:
     def refresh(self, now=None):
         now = (now or datetime.now(KST)).astimezone(KST)
         try:
+            # Disabled, unconfigured weather is valid as a saved draft, but no
+            # manual/background request may send guessed coordinates such as 0,0.
+            validate_weather_region(self.condition)
             updates = {}
             checked = now
             if self.public_client is not None:

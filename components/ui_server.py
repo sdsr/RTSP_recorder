@@ -74,6 +74,54 @@ def recording_scope_from_id(identifier, root_info, trash=False):
         raise ValueError("영상 목록이 변경되었거나 식별자가 올바르지 않습니다. 목록을 새로고침하세요.") from None
 
 
+def recording_folder_parts(relative):
+    if (not isinstance(relative, str) or len(relative) > 4096 or "\\" in relative
+            or any(ord(char) < 32 or ord(char) == 127 for char in relative)):
+        raise ValueError("영상 폴더 경로가 올바르지 않습니다.")
+    parts = relative.split("/") if relative else []
+    if len(parts) > 31 or any(part in ("", ".", "..") or part.startswith(".") for part in parts):
+        raise ValueError("저장 폴더 안의 일반 폴더만 사용할 수 있습니다.")
+    return parts
+
+
+def recording_folder_id(relative, root_info, folder_info):
+    recording_folder_parts(relative)
+    value = {"path": relative, "root": [root_info.st_dev, root_info.st_ino],
+             "folder": [folder_info.st_dev, folder_info.st_ino], "kind": "folder", "version": 1}
+    return base64.urlsafe_b64encode(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
+
+
+@contextmanager
+def recording_open_folder(root_fd, identifier):
+    try:
+        if not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,8192}", identifier):
+            raise ValueError()
+        raw = base64.b64decode(identifier + "=" * (-len(identifier) % 4), altchars=b"-_", validate=True)
+        value = json.loads(raw.decode("utf-8"))
+        root_info = os.fstat(root_fd)
+        if (not isinstance(value, dict) or value.get("version") != 1 or value.get("kind") != "folder"
+                or value.get("root") != [root_info.st_dev, root_info.st_ino]
+                or not isinstance(value.get("folder"), list) or len(value["folder"]) != 2
+                or any(isinstance(number, bool) or not isinstance(number, int) for number in value["folder"])):
+            raise ValueError()
+        relative = value["path"]
+        parts = recording_folder_parts(relative)
+    except (ValueError, UnicodeError, TypeError, KeyError):
+        raise ValueError("영상 폴더가 변경되었거나 식별자가 올바르지 않습니다. 목록을 새로고침하세요.") from None
+    try:
+        with recording_directory(root_fd, parts) as folder_fd:
+            info = os.fstat(folder_fd)
+            if [info.st_dev, info.st_ino] != value["folder"]:
+                raise ValueError("영상 폴더가 변경되었습니다. 목록을 새로고침하세요.")
+            yield folder_fd, relative
+    except (FileNotFoundError, NotADirectoryError):
+        raise ValueError("영상 폴더가 없어졌거나 변경되었습니다. 목록을 새로고침하세요.") from None
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError("심볼릭 링크 폴더는 열 수 없습니다. 목록을 새로고침하세요.") from None
+        raise
+
+
 @contextmanager
 def recording_directory(root_fd, parts=(), create=False):
     fd = os.dup(root_fd)
@@ -118,6 +166,27 @@ def recording_walk(root_fd, prefix=()):
                     yield from recording_walk(child, prefix + (name,))
             elif stat.S_ISREG(info.st_mode) and name.lower().endswith(".mp4"):
                 yield "/".join(prefix + (name,)), info
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                continue
+            raise
+
+
+def recording_folder_walk(root_fd, prefix=()):
+    """List the real directory hierarchy, including empty directories, without links."""
+    yield "/".join(prefix), os.fstat(root_fd)
+    if len(prefix) >= 31:
+        return
+    for name in sorted(os.listdir(root_fd)):
+        if name.startswith(".") or "/" in name or "\\" in name or any(ord(c) < 32 or ord(c) == 127 for c in name):
+            continue
+        try:
+            info = os.stat(name, dir_fd=root_fd, follow_symlinks=False)
+            if stat.S_ISDIR(info.st_mode):
+                with recording_directory(root_fd, (name,)) as child:
+                    yield from recording_folder_walk(child, prefix + (name,))
         except (FileNotFoundError, NotADirectoryError):
             continue
         except OSError as exc:
@@ -220,7 +289,7 @@ def recording_rename_exclusive(source_fd, source_name, target_fd, target_name):
 
 def camera_connection_defaults(mode="setup"):
     """The editable UI model never contains a stored camera password."""
-    return {"mode": mode, "ips": "", "username": "admin", "password": "",
+    return {"mode": mode, "ips": "", "username": "", "password": "",
             "password_saved": False, "port": 554, "path": "/profile2/media.smp"}
 
 
@@ -254,6 +323,8 @@ def camera_connection_for_ui(data):
     cameras = data.get("cameras", "auto")
     if cameras == "auto":
         return camera_connection_defaults()
+    if cameras == []:
+        return camera_connection_defaults("direct")
     result = camera_connection_defaults("custom")
     if not isinstance(cameras, list) or not cameras:
         return result
@@ -294,7 +365,7 @@ def cameras_from_connection(connection, data):
         raise ValueError("카메라 주소에는 IPv4 주소만 입력하세요. RTSP 주소나 주소 범위는 사용할 수 없습니다.") from None
     if not ips or len(ips) > 256:
         raise ValueError("카메라 IPv4 주소는 1개 이상, 256개 이하로 입력하세요.")
-    username, password = connection.get("username", "admin"), connection.get("password", "")
+    username, password = connection.get("username", ""), connection.get("password", "")
     if any(not isinstance(value, str) or len(value) > 1024 or any(ord(c) < 32 or ord(c) == 127 for c in value)
            for value in (username, password)):
         raise ValueError("카메라 계정과 비밀번호 형식을 확인하세요.")
@@ -398,7 +469,7 @@ def friendly_ui_error(exc):
         ("already using output_dir", "같은 저장 폴더를 사용하는 녹화가 이미 실행 중입니다."),
         ("not writable", "저장 폴더에 쓸 수 없습니다. 경로와 장비 계정의 권한을 확인하세요."),
         ("already passed today", "시작 시각이 이미 지났습니다. 이후 시각을 고르거나 지금 시작을 선택하세요."),
-        ("Weather region", "기상청 지역 목록에서 시·도와 시·군·구를 선택하세요."),
+        ("Weather region", "날씨 지역 목록에서 시·도와 시·군·구를 선택하세요."),
         ("time-ranges", "시간 구간은 시작·종료 시각을 모두 지정하고, 두 시각을 다르게 설정하세요."),
         ("recording_dates", "녹화 날짜를 확인하세요. 날짜는 YYYY-MM-DD 형식으로 중복 없이 지정합니다."),
         ("segment_minutes", "파일 분할 길이를 1초 이상, 1,440분 이하로 입력하세요."),
@@ -420,6 +491,14 @@ def friendly_ui_error(exc):
     return text[:600]
 
 
+CAMERA_SETUP_MESSAGE = "장비 설정에서 카메라 IP와 필요한 계정을 입력하거나 기존 setup.ini를 선택한 뒤 설정을 저장하세요."
+
+
+def camera_setup_required(data):
+    """Only the explicit empty-list draft is an unfinished first-run setup."""
+    return isinstance(data, dict) and data.get("cameras") == []
+
+
 class RecorderUiController:
     def __init__(self, config_path):
         self.config_path = Path(config_path).expanduser().resolve()
@@ -437,6 +516,8 @@ class RecorderUiController:
         self.cached_settings = None
         self.cached_revision = None
         self.live_view = LiveViewManager(self.settings)
+        self.camera_snapshots = CameraSnapshotManager(self.settings, self.config_path)
+        self.switch_manager = SwitchManager(self.config_path.parent / "switches.json")
         self.camera_profiles = CameraProfileManager(self)
         self.camera_ping = CameraPingMonitor(self.settings, self.config_path)
         self.shared_browser_server = None
@@ -515,6 +596,8 @@ class RecorderUiController:
         # Keep this separate from action_lock: close() joins the ping thread.
         with self.settings_lock:
             data, revision = self.read_config()
+            if camera_setup_required(data):
+                raise ValueError(CAMERA_SETUP_MESSAGE)
             if refresh or self.cached_settings is None or revision != self.cached_revision:
                 self.cached_settings = settings_from_data(data, self.config_path.parent)
                 self.cached_revision = revision
@@ -524,7 +607,7 @@ class RecorderUiController:
     def configuration(self):
         data, revision = self.read_config()
         safe = {key: data[key] for key in ("setup_ini", "output_dir", "intersection_name", "weather", "recording_dates",
-                 "time_ranges", "segment_minutes", "retention_days", "min_free_gb", "weather_condition") if key in data}
+                 "time_ranges", "recording_mode", "segment_minutes", "retention_days", "min_free_gb", "weather_condition") if key in data}
         safe.setdefault("weather_condition", default_weather_config())
         if isinstance(safe["weather_condition"], dict):
             safe["weather_condition"] = {key: value for key, value in safe["weather_condition"].items()
@@ -532,6 +615,7 @@ class RecorderUiController:
         safe.setdefault("setup_ini", "auto")
         safe.setdefault("output_dir", "auto")
         safe.setdefault("segment_minutes", data.get("segment_seconds", 1800) / 60)
+        safe.setdefault("recording_mode", "split" if "segment_minutes" in data or "segment_seconds" in data else "window")
         if "time_ranges" not in safe and "schedules" in data:
             # Display only representable minute-based schedules without silently
             # replacing an existing all-day or fractional-second legacy plan.
@@ -553,7 +637,9 @@ class RecorderUiController:
              "direct_url": "url" in item}
             for item in (cameras if isinstance(cameras, list) else []) if isinstance(item, dict)]
         safe["camera_connection"] = camera_connection_for_ui(data)
-        return {"config": safe, "revision": revision, "path": str(self.config_path), "regions": region_data()}
+        required = camera_setup_required(data)
+        return {"config": safe, "revision": revision, "path": str(self.config_path), "regions": region_data(),
+                "setup_required": required, "setup_message": CAMERA_SETUP_MESSAGE if required else ""}
 
     def setup_candidates(self):
         candidates = set()
@@ -674,7 +760,30 @@ class RecorderUiController:
             pass
         return items
 
-    def recordings(self, camera="", day="", offset=0, limit=50, trash=False):
+    @staticmethod
+    def recording_folders(root_fd, candidates):
+        root_info = os.fstat(root_fd)
+        folders = []
+        by_path = {}
+        for relative, info in recording_folder_walk(root_fd):
+            parts = recording_folder_parts(relative)
+            parent = by_path.get("/".join(parts[:-1])) if parts else None
+            item = {"id": recording_folder_id(relative, root_info, info),
+                    "name": parts[-1] if parts else "저장 폴더", "path": relative,
+                    "parent_id": parent["id"] if parent else None, "depth": len(parts),
+                    "count": 0, "size": 0, "exists": True}
+            folders.append(item)
+            by_path[relative] = item
+        for relative, info in candidates:
+            parts = recording_relative_parts(relative)
+            for length in range(len(parts)):
+                parent = by_path.get("/".join(parts[:length]))
+                if parent is not None:
+                    parent["count"] += 1
+                    parent["size"] += info.st_size
+        return folders
+
+    def recordings(self, camera="", day="", offset=0, limit=50, trash=False, folder=""):
         try:
             if isinstance(offset, bool) or isinstance(limit, bool):
                 raise ValueError()
@@ -683,37 +792,83 @@ class RecorderUiController:
                 raise ValueError()
         except (ValueError, TypeError):
             raise ValueError("영상 목록 범위가 올바르지 않습니다. 한 번에 1~100개를 조회하세요.") from None
-        if not isinstance(camera, str) or not isinstance(day, str):
+        if not isinstance(camera, str) or not isinstance(day, str) or not isinstance(folder, str):
             raise ValueError("영상 검색 조건이 올바르지 않습니다.")
+        if trash and folder:
+            raise ValueError("휴지통에서는 폴더를 선택할 수 없습니다.")
         if day:
             try:
                 if date.fromisoformat(day).isoformat() != day:
                     raise ValueError()
             except ValueError:
                 raise ValueError("영상 날짜는 YYYY-MM-DD 형식으로 선택하세요.") from None
+        folders, breadcrumbs = [], []
+        selected_path = ""
+        current_folder = None if trash else {"id": "", "name": "저장 폴더", "path": "", "exists": False}
         try:
             with self.recording_root() as root_fd:
                 if trash:
                     items = self.recording_trash_items(root_fd)
                 else:
+                    if folder:
+                        with recording_open_folder(root_fd, folder) as (_, selected_path):
+                            pass
                     candidates = list(recording_walk(root_fd))
                     activity = self.recording_activity(root_fd, candidates)
                     items = [self.recording_item(relative, info, activity) for relative, info in candidates]
                     root_info = os.fstat(root_fd)
                     for item, (relative, info) in zip(items, candidates):
                         item["id"] = recording_scoped_id(relative, root_info, info)
+                    folders = self.recording_folders(root_fd, candidates)
+                    by_path = {entry["path"]: entry for entry in folders}
+                    if selected_path not in by_path or (folder and by_path[selected_path]["id"] != folder):
+                        raise ValueError("영상 폴더가 변경되었습니다. 목록을 새로고침하세요.")
+                    current_folder = by_path[selected_path]
+                    parts = recording_folder_parts(selected_path)
+                    breadcrumbs = [by_path["/".join(parts[:length])] for length in range(len(parts) + 1)]
         except FileNotFoundError:
+            if folder:
+                raise ValueError("저장 폴더가 없어졌거나 변경되었습니다. 목록을 새로고침하세요.") from None
             items = []
         # A current URL is not evidence of the source of a historical recording.
         # Keep it separate from the host saved in new recording filenames.
         current_hosts = {entry.name: urlsplit(entry.url).hostname for entry in self.settings().cameras}
         for item in items:
             item["current_camera_host"] = current_hosts.get(item["camera"], "")
+        if selected_path:
+            items = [item for item in items if item["relative_path"].startswith(selected_path + "/")]
         cameras, dates = sorted({item["camera"] for item in items}), sorted({item["date"] for item in items}, reverse=True)
         selected = [item for item in items if (not camera or item["camera"] == camera) and (not day or item["date"] == day)]
         selected.sort(key=lambda item: (item.get("trashed_at", item["modified_at"]), item["relative_path"]), reverse=True)
         return {"items": selected[offset:offset + limit], "total": len(selected), "offset": offset, "limit": limit,
-                "cameras": cameras, "dates": dates, "trash": bool(trash)}
+                "cameras": cameras, "dates": dates, "trash": bool(trash),
+                "total_size": sum(item["size"] for item in selected), "folders": folders,
+                "current_folder": current_folder, "breadcrumbs": breadcrumbs}
+
+    def open_recording_folder(self, identifier):
+        with self.action_lock, self.recording_root() as root_fd:
+            with recording_open_folder(root_fd, identifier) as (folder_fd, relative):
+                if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+                    raise ValueError("이 ED 프로그램에 연결된 데스크톱 화면이 없습니다. 웹에서 폴더와 영상을 확인하세요.")
+                executable = shutil.which("xdg-open")
+                if not executable:
+                    raise ValueError("이 ED에서 파일 관리자를 찾을 수 없습니다. 웹에서 폴더와 영상을 확인하세요.")
+                # Pin cwd to the opened inode. Never pass an arbitrary URL/path to the opener,
+                # or reopen the selected directory through a replaceable path or symlink.
+                environment = os.environ.copy()
+                environment.pop("PWD", None)
+                process = subprocess.Popen([executable, "."], cwd="/proc/self/fd/{}".format(folder_fd),
+                                           pass_fds=(folder_fd,), env=environment,
+                                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL)
+                try:
+                    code = process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    threading.Thread(target=process.wait, daemon=True).start()
+                else:
+                    if code:
+                        raise ValueError("이 ED의 파일 관리자에서 폴더를 열지 못했습니다. 데스크톱 로그인 상태를 확인하세요.")
+        return {"message": "프로그램이 실행 중인 ED의 파일 관리자에 폴더 열기를 요청했습니다.", "path": relative}
 
     def recording_media(self, identifier):
         with self.recording_root() as root_fd:
@@ -819,16 +974,24 @@ class RecorderUiController:
 
     def state(self):
         result = {"running": self._running(), "mode": self.mode, "error": "", "external_running": False,
-                  "forecast_busy": self.preview_busy, "now": datetime.now(KST).isoformat()}
+                  "forecast_busy": self.preview_busy, "now": datetime.now(KST).isoformat(),
+                  "setup_required": False, "setup_message": ""}
         result["exit_code"] = self.process.poll() if self.process is not None else None
+        result["once_camera"] = getattr(self, "once_camera", None) if self.mode == "once" else None
         with self.log_lock:
             result["logs"] = list(self.logs)
         try:
-            settings = self.settings()
+            data, _ = self.read_config()
+            required = camera_setup_required(data)
+            result["setup_required"] = required
+            result["setup_message"] = CAMERA_SETUP_MESSAGE if required else ""
+            settings = (settings_from_data(data, self.config_path.parent, allow_unconfigured=True)
+                        if required else self.settings())
             status = safe_read_status(settings.output_dir)
             result["output_dir"] = str(settings.output_dir)
             result["cameras"] = [{"name": camera.name, "client_no": camera.client_no,
-                                  "intersection": camera.intersection, "direction": camera.direction}
+                                  "intersection": camera.intersection, "direction": camera.direction,
+                                  "ip": urlsplit(camera.url).hostname or ""}
                                  for camera in settings.cameras]
             result["active_cameras"] = status.get("active_cameras", [])
             result["once_end"] = status.get("once_end")
@@ -863,7 +1026,7 @@ class RecorderUiController:
 
     def save(self, patch, revision):
         allowed = {"setup_ini", "output_dir", "intersection_name", "weather", "recording_dates", "time_ranges",
-                   "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection"}
+                   "recording_mode", "segment_minutes", "retention_days", "min_free_gb", "weather_condition", "camera_connection"}
         if not isinstance(patch, dict) or set(patch) - allowed:
             raise ValueError("저장할 설정 항목이 올바르지 않습니다.")
         with self.action_lock:
@@ -880,7 +1043,10 @@ class RecorderUiController:
                 data.pop("schedules", None)
             if "segment_minutes" in patch:
                 data.pop("segment_seconds", None)
-            proposed = settings_from_data(data, self.config_path.parent)
+            required = camera_setup_required(data)
+            if required and self._running():
+                raise ValueError("녹화 중에는 카메라가 없는 설정을 적용할 수 없습니다. 녹화를 중지한 뒤 다시 설정하세요.")
+            proposed = settings_from_data(data, self.config_path.parent, allow_unconfigured=required)
             resume = self._running() and self.mode == "scheduled"
             if resume:
                 check_output_access(proposed)
@@ -895,8 +1061,9 @@ class RecorderUiController:
             self.preview = None
             if resume:
                 self.start("scheduled")
-            return {"message": "설정을 저장하고 예약 녹화를 다시 시작했습니다." if resume else "설정을 저장했습니다.",
-                    "revision": self.read_config()[1]}
+            message = ("설정을 저장하고 예약 녹화를 다시 시작했습니다." if resume else
+                       "기본 설정을 저장했습니다. 녹화 전 카메라를 등록하세요." if required else "설정을 저장했습니다.")
+            return {"message": message, "revision": self.read_config()[1], "setup_required": required}
 
     def check(self):
         settings = self.settings(refresh=True)
@@ -904,7 +1071,7 @@ class RecorderUiController:
         check_ffmpeg(settings)
         return {"message": "설정 검사를 통과했습니다. 실제 영상은 5분 시험 녹화 후 확인하세요."}
 
-    def start(self, mode, minutes=5, start_at=None):
+    def start(self, mode, minutes=1, start_at=None, camera=None):
         with self.action_lock:
             if self.closing:
                 raise ValueError("화면을 종료하고 있습니다.")
@@ -913,6 +1080,10 @@ class RecorderUiController:
             if mode not in ("scheduled", "once"):
                 raise ValueError("녹화 실행 방식이 올바르지 않습니다.")
             settings = self.settings(refresh=True)
+            if camera not in (None, ""):
+                if mode != "once":
+                    raise ValueError("카메라 선택은 한 번만 녹화에서 사용할 수 있습니다.")
+                settings = select_once_camera(settings, camera)
             check_output_access(settings)
             check_ffmpeg(settings)
             if sys.platform != "linux":
@@ -925,6 +1096,8 @@ class RecorderUiController:
             if mode == "once":
                 make_once_window(minutes, start_at)
                 command += ["--record-minutes", str(minutes)]
+                if camera not in (None, ""):
+                    command += ["--record-camera", camera]
                 if start_at:
                     command += ["--start-at", start_at]
             with self.log_lock:
@@ -933,10 +1106,12 @@ class RecorderUiController:
                                             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
                                             start_new_session=True)
             self.mode = mode
+            self.once_camera = camera or None if mode == "once" else None
             self.reader = threading.Thread(target=self._read_log, args=(self.process,), daemon=True)
             self.reader.start()
             return {"message": "예약 녹화를 시작했습니다. 시간표와 날씨 조건에 따라 대기할 수 있습니다." if mode == "scheduled"
-                    else "한 번 녹화를 시작했습니다. 지정한 시간이 끝나면 자동 종료합니다."}
+                    else ("{} · {}분 녹화를 시작했습니다. 지정한 시간이 끝나면 자동 종료합니다.".format(
+                        camera or "모든 카메라", minutes))}
 
     def _read_log(self, process):
         try:
@@ -1005,8 +1180,10 @@ class RecorderUiController:
     def close(self):
         with self.action_lock:
             self.closing = True
+            self.switch_manager.close()
             self.camera_ping.close()
             self.live_view.close()
+            self.camera_snapshots.close()
             if self.shared_browser_server is not None:
                 self.shared_browser_server.shutdown()
                 self.shared_browser_server.server_close()
@@ -1118,7 +1295,7 @@ def make_ui_handler(controller, token, port):
                 parsed = urlsplit(self.path)
                 path = parsed.path
                 query = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=20)
-                media_token = self._query_value(query, "token") if path == "/api/recordings/media" else None
+                media_token = self._query_value(query, "token") if path in ("/api/recordings/media", "/api/snapshots/media") else None
                 if not self._allowed(path != "/", media_token):
                     return
                 if path == "/":
@@ -1130,6 +1307,24 @@ def make_ui_handler(controller, token, port):
                     self._json(controller.state())
                 elif path == "/api/live/cameras":
                     self._json({"cameras": controller.live_view.cameras()})
+                elif path == "/api/snapshots":
+                    self._json({"items": controller.camera_snapshots.list()})
+                elif path == "/api/snapshots/media":
+                    download = self._query_value(query, "download")
+                    if download not in ("", "0", "1"):
+                        raise ValueError("이미지 다운로드 조건이 올바르지 않습니다.")
+                    item, content = controller.camera_snapshots.media(self._query_value(query, "id"))
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Content-Length", str(len(content)))
+                    disposition = "attachment" if download == "1" else "inline"
+                    self.send_header("Content-Disposition", disposition + "; filename=\"camera.png\"; filename*=UTF-8''" + quote(item["filename"], safe=""))
+                    self._security_headers()
+                    self.end_headers()
+                    if self.command != "HEAD":
+                        self.wfile.write(content)
+                elif path == "/api/switch/config":
+                    self._json(controller.switch_manager.get_config())
                 elif path == "/api/ping/history":
                     self._json(controller.camera_ping.history(self._query_value(query, "camera") or None,
                                int(self._query_value(query, "hours", "24"))))
@@ -1162,7 +1357,8 @@ def make_ui_handler(controller, token, port):
                     if trash not in ("0", "1"):
                         raise ValueError("휴지통 조회 조건이 올바르지 않습니다.")
                     self._json(controller.recordings(self._query_value(query, "camera"), self._query_value(query, "date"),
-                               self._query_value(query, "offset", "0"), self._query_value(query, "limit", "50"), trash == "1"))
+                               self._query_value(query, "offset", "0"), self._query_value(query, "limit", "50"), trash == "1",
+                               self._query_value(query, "folder")))
                 elif path == "/api/recordings/media":
                     self._media(self._query_value(query, "id"), self._query_value(query, "download") == "1")
                 else:
@@ -1190,13 +1386,23 @@ def make_ui_handler(controller, token, port):
                 elif self.path == "/api/check":
                     result = controller.check()
                 elif self.path == "/api/start":
-                    result = controller.start(data.get("mode"), data.get("minutes", 5), data.get("start_at") or None)
+                    result = controller.start(data.get("mode"), data.get("minutes", 1), data.get("start_at") or None, data.get("camera"))
                 elif self.path == "/api/stop":
                     result = controller.stop()
                 elif self.path == "/api/live/start":
                     result = controller.live_view.start(data.get("camera"), data.get("profile", "current"))
                 elif self.path == "/api/live/stop":
                     result = controller.live_view.stop(data.get("session"))
+                elif self.path == "/api/snapshots/capture":
+                    result = controller.camera_snapshots.capture(data.get("camera"), data.get("profile", "current"))
+                elif self.path == "/api/switch/config":
+                    result = controller.switch_manager.save_connection(data)
+                elif self.path == "/api/switch/inspect":
+                    result = controller.switch_manager.inspect(data)
+                elif self.path == "/api/switch/plan":
+                    result = controller.switch_manager.plan(data)
+                elif self.path == "/api/switch/apply":
+                    result = controller.switch_manager.apply(data)
                 elif self.path == "/api/ping/check":
                     result = controller.camera_ping.request_check()
                 elif self.path == "/api/camera-profiles/read":
@@ -1218,6 +1424,8 @@ def make_ui_handler(controller, token, port):
                     result = controller.trash_recording(data.get("id"))
                 elif self.path == "/api/recordings/restore":
                     result = controller.restore_recording(data.get("id"))
+                elif self.path == "/api/recordings/open-folder":
+                    result = controller.open_recording_folder(data.get("folder"))
                 else:
                     self._json({"error": "없는 경로입니다."}, 404)
                     return

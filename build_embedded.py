@@ -15,10 +15,15 @@ def build():
         assets.append("EMBEDDED_" + name + " = (\n" + "\n".join(
             '    "' + encoded[index:index + 100] + '"' for index in range(0, len(encoded), 100)) + "\n)\n")
     blocks = {"ASSETS": "\n".join(assets)}
-    for name in ("weather", "public_weather", "live_view", "camera_profiles", "camera_ping", "ui_server", "desktop_launcher", "desktop_gui"):
+    for name in ("weather", "public_weather", "live_view", "camera_profiles", "camera_ping", "camera_snapshots", "switch_manager", "ui_server", "desktop_launcher", "desktop_gui"):
         blocks[name.upper()] = (root / "components" / (name + ".py")).read_text(encoding="utf-8")
     for name, value in blocks.items():
         begin, end = "# BEGIN EMBEDDED " + name, "# END EMBEDDED " + name
+        if name in ("CAMERA_SNAPSHOTS", "SWITCH_MANAGER") and begin not in source and end not in source:
+            anchor = "# BEGIN EMBEDDED UI_SERVER"
+            if source.count(anchor) != 1:
+                raise ValueError("Missing/duplicate UI insertion marker")
+            source = source.replace(anchor, begin + "\n" + end + "\n\n" + anchor)
         pattern = re.escape(begin) + r".*?" + re.escape(end)
         if len(re.findall(pattern, source, flags=re.S)) != 1:
             raise ValueError("Missing/duplicate component marker: " + name)

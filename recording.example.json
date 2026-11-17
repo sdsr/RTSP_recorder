@@ -1,14 +1,14 @@
 {
   "setup_ini": "auto",
-  "output_dir": "auto",
+  "output_dir": "./recordings",
   "intersection_name": "",
   "weather": "",
   "recording_dates": [],
   "weather_condition": {
     "enabled": false,
     "region": {
-      "sido": "부산광역시",
-      "sigungu": "해운대구",
+      "sido": "",
+      "sigungu": "",
       "eupmyeondong": ""
     },
     "conditions": [
@@ -19,7 +19,7 @@
     "poll_minutes": 30,
     "met_contact": ""
   },
-  "cameras": "auto",
+  "cameras": [],
   "time_ranges": [
     "06:30-07:30",
     "10:00-11:00",
@@ -27,6 +27,7 @@
     "17:00-18:00",
     "21:00-22:00"
   ],
+  "recording_mode": "window",
   "segment_minutes": 30,
   "retention_days": 0,
   "min_free_gb": 5,
