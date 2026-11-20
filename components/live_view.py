@@ -3,15 +3,27 @@
 import queue
 import secrets
 import struct
+import socket as _live_socket
 import subprocess
 import threading
 import time
 import re
+from types import SimpleNamespace as _LiveSettings
 from urllib.parse import urlsplit
 
 
 class LiveViewError(ValueError):
     """Safe to display: never includes a camera URL or subprocess stderr."""
+
+
+def live_view_port_settings(config, base):
+    """The first camera can be previewed before the recorder has a camera list."""
+    executable = config.get("ffmpeg", "ffmpeg")
+    if not isinstance(executable, str) or not executable or any(ord(c) < 32 for c in executable):
+        raise LiveViewError("녹화기의 FFmpeg 실행 파일 설정을 확인하세요.")
+    if "/" in executable or "\\" in executable:
+        executable = str(resolve_path(executable, base, "ffmpeg"))
+    return _LiveSettings(ffmpeg=executable)
 
 
 def live_view_camera_info(camera):
@@ -215,7 +227,7 @@ class _LiveViewSession:
             self._finished.set()
             self._stderr_thread.join(timeout=0.2)
             if self._auth_error and not self.mime:
-                self.error = "카메라 인증에 실패했습니다. 저장된 계정·비밀번호 또는 카메라의 로그인 잠금을 확인하세요. 자동 재시도하지 않습니다."
+                self.error = "카메라 인증에 실패했습니다. 카메라 계정·비밀번호 또는 로그인 잠금을 확인하세요. 자동 재시도하지 않습니다."
             self._ready.set()
             self._terminate()
 
@@ -304,8 +316,9 @@ class _LiveViewSession:
 
 class LiveViewManager:
     """One browser preview, independent of any scheduled recorder process."""
-    def __init__(self, settings_callback):
+    def __init__(self, settings_callback, port_settings_callback=None):
         self._settings = settings_callback
+        self._port_settings = port_settings_callback or settings_callback
         self._lock = threading.RLock()
         self._start_lock = threading.Lock()
         self._session = None
@@ -324,33 +337,87 @@ class LiveViewManager:
                 raise LiveViewError("저장된 카메라를 선택하세요.")
             camera = matches[0]
             url = live_view_url(camera, profile)
-            try:
-                executable, timeout_option = check_ffmpeg(settings)
-            except (ValueError, OSError, subprocess.SubprocessError):
-                raise LiveViewError("FFmpeg 실행 파일과 RTSP 지원 설정을 확인하세요.") from None
-            command = [executable, "-hide_banner", "-loglevel", "error", "-nostdin",
-                       "-rtsp_transport", "tcp", timeout_option, "10000000", "-i", url,
-                       "-map", "0:v:0", "-an", "-sn", "-dn", "-c:v", "copy",
-                       "-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
-                       "-avoid_negative_ts", "make_zero", "-flush_packets", "1", "pipe:1"]
             info = live_view_camera_info(camera)
             if profile != "current":
                 info["profile"] = profile
-            with self._lock:
-                if self._closed:
-                    raise LiveViewError("미리보기 서비스가 종료되었습니다.")
-                self.stop()
-                session = _LiveViewSession(command, info)
-                self._session = session
+            return self._start_url(settings, url, info)
+
+    def start_port(self, observation, username, password, profile="2"):
+        """Preview the one camera identified by the controller's fresh switch-port lookup."""
+        if not isinstance(observation, dict):
+            raise LiveViewError("카메라를 연결한 포트를 다시 조회하세요.")
+        port = observation.get("direct_port")
+        if type(port) is not int or not 1 <= port <= 8:
+            raise LiveViewError("확인된 카메라 LAN 포트를 선택하세요.")
+        if (not isinstance(username, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,8}", username)
+                or not isinstance(password, str) or not 1 <= len(password) <= 64
+                or any(ord(char) < 32 or ord(char) == 127 for char in password)):
+            raise LiveViewError("카메라에 설정한 현재 아이디와 비밀번호를 입력하세요.")
+        # Factory profiles differ by model. Accept a profile number from the
+        # camera's list, never a client-supplied URL, hostname, path or port.
+        if type(profile) not in (str, int) or not re.fullmatch(r"[1-9][0-9]?", str(profile)):
+            raise LiveViewError("미리볼 영상 프로파일 번호를 선택하세요.")
+        profile = str(profile)
+        ip, mac = _cai_ip(observation.get("ip")), _cai_mac(observation.get("mac"))
+        source, interface = _cai_ip(observation.get("source")), observation.get("interface")
+
+        def direct_route():
+            # FFmpeg opens its own connection using the kernel's normal route.
+            route = _cai_route(ip)
+            if route["dev"] != interface or route["source"] != source:
+                raise LiveViewError("카메라 경로가 조회 때와 다릅니다. 포트를 다시 조회하세요.")
+            return route
+
+        def verify_neighbor():
+            if _cai_neighbor(ip, direct_route()) != mac:
+                raise LiveViewError("현재 IP의 장치가 선택한 포트의 MAC과 다릅니다. 포트를 다시 조회하세요.")
+
+        with self._start_lock:
+            route = direct_route()
+            _camera_admin_duplicate_probe(ip, dict(route, expected_mac=mac))
+            # A raw ARP broadcast need not create a kernel neighbor. Opening
+            # RTSP TCP without credentials first lets us verify the MAC FFmpeg
+            # will actually use before forwarding the operator's credentials.
             try:
-                result = session.ready()
-                with self._lock:
-                    if self._session is not session:
-                        raise LiveViewError("미리보기가 중지되었습니다.")
-                return result
-            except Exception:
-                self.stop(session.identifier)
-                raise
+                with _live_socket.create_connection((ip, 554), timeout=3, source_address=(source, 0)):
+                    pass
+            except OSError:
+                raise LiveViewError("카메라의 RTSP 포트 554에 연결할 수 없습니다.") from None
+            verify_neighbor()
+            settings = self._port_settings()
+            url = _ca_url("rtsp://{}:554/profile{}/media.smp".format(ip, profile),
+                          username=username, password=password)
+            info = {"name": "LAN {} 카메라".format(port), "ip": ip, "port": port, "mac": mac,
+                    "profile": profile, "can_select_profile": True}
+            return self._start_url(settings, url, info, verify_ready=verify_neighbor)
+
+    def _start_url(self, settings, url, info, verify_ready=None):
+        try:
+            executable, timeout_option = check_ffmpeg(settings)
+        except (ValueError, OSError, subprocess.SubprocessError):
+            raise LiveViewError("FFmpeg 실행 파일과 RTSP 지원 설정을 확인하세요.") from None
+        command = [executable, "-hide_banner", "-loglevel", "error", "-nostdin",
+                   "-rtsp_transport", "tcp", timeout_option, "10000000", "-i", url,
+                   "-map", "0:v:0", "-an", "-sn", "-dn", "-c:v", "copy",
+                   "-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
+                   "-avoid_negative_ts", "make_zero", "-flush_packets", "1", "pipe:1"]
+        with self._lock:
+            if self._closed:
+                raise LiveViewError("미리보기 서비스가 종료되었습니다.")
+            self.stop()
+            session = _LiveViewSession(command, info)
+            self._session = session
+        try:
+            result = session.ready()
+            if verify_ready is not None:
+                verify_ready()
+            with self._lock:
+                if self._session is not session:
+                    raise LiveViewError("미리보기가 중지되었습니다.")
+            return result
+        except Exception:
+            self.stop(session.identifier)
+            raise
 
     def stream(self, session_id):
         with self._lock:

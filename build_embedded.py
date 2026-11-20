@@ -10,7 +10,8 @@ def build():
     target = root / "record.py"
     source = target.read_text(encoding="utf-8")
     assets = []
-    for name, filename in (("REGIONS", "weather_regions.json"), ("UI", "ui.html")):
+    for name, filename in (("REGIONS", "weather_regions.json"), ("UI", "ui.html"),
+                           ("SWITCH_NETWORK", "tools/switch_management_network.py")):
         encoded = base64.b64encode(zlib.compress((root / filename).read_bytes(), 9)).decode("ascii")
         assets.append("EMBEDDED_" + name + " = (\n" + "\n".join(
             '    "' + encoded[index:index + 100] + '"' for index in range(0, len(encoded), 100)) + "\n)\n")

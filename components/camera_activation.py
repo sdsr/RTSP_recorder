@@ -172,10 +172,10 @@ def _camera_admin_encrypt(public_key, password):
         raise CameraActivationError('카메라 비밀번호 암호화를 완료하지 못했습니다.') from None
 
 
-def _cai_arp_probe(ip, route):
+def _cai_arp_probe(ip, route, *, dad=False):
     """Read-only broadcast ARP requests, both supported arping implementations."""
     ip = _cai_ip(ip)
-    source = _cai_ip(route.get('source'))
+    source = '0.0.0.0' if dad else _cai_ip(route.get('source'))
     interface = route.get('dev', '')
     if not _cai_re.fullmatch(r'[A-Za-z0-9_.:-]{1,15}', interface):
         raise CameraActivationError('ARP 검사용 NIC가 올바르지 않습니다.')
@@ -193,6 +193,8 @@ def _cai_arp_probe(ip, route):
               (_cai_re.search(r'-I\s+<?interface', help_text) and _cai_re.search(r'-b\s+.*broadcast', help_text))):
             flavor = 'iputils'
             args = ['-b', '-I', interface, '-s', source, '-c', '3', '-w', '5', ip]
+            if dad:
+                args.insert(0, '-D')  # iputils DAD mode explicitly permits source 0.0.0.0.
         else:
             raise CameraActivationError('지원하지 않는 arping 형식입니다. Thomas Habets 또는 iputils arping이 필요합니다.')
         result = _cai_subprocess.run([binary] + args, capture_output=True, text=True, timeout=8, env=env)
@@ -211,12 +213,15 @@ def _cai_arp_probe(ip, route):
         sent = int(sent_match.group(1)) if sent_match else -1
         received = int(received_match.group(1)) if received_match else -1
         replies = [_cai_mac(m) for m in _cai_re.findall(r'\breply from\s+' + _cai_re.escape(ip) + r'\s+\[(' + _CAI_MAC_RE + r')\]', output, _cai_re.I)]
-    if sent < 3 or received < 0 or received != len(replies):
+    minimum_sent = 1 if dad and received > 0 else 3
+    if sent < minimum_sent or received < 0 or received != len(replies):
         raise CameraActivationError(_CAI_ARP_PRIVILEGE)
     if len(set(replies)) > 1:
         raise CameraActivationError('같은 IP에서 서로 다른 MAC 응답이 있습니다. 중복 IP 장치를 분리한 뒤 다시 시도하세요.')
     # Habets -d returns 0 for no duplicate (including zero replies); iputils returns 1 for zero.
     expected_code = 0 if flavor == 'habets' or received else 1
+    if flavor == 'iputils' and dad:
+        expected_code = 1 if received else 0
     if result.returncode != expected_code:
         raise CameraActivationError(_CAI_ARP_PRIVILEGE)
     return {'mac': replies[0] if replies else None, 'replies': received, 'probe_flavor': flavor}
@@ -237,6 +242,16 @@ def _camera_admin_address_available(ip, route):
     if result['replies']:
         raise CameraActivationError('새 IP에서 ARP 응답을 받았습니다. 사용하지 않는 주소를 지정하세요.')
     return None
+
+
+def _camera_admin_handover_available(ip, old_route):
+    """Probe the proposed address on the old camera's Ethernet link, without IP routing."""
+    for dev in _cai_ip_json('-4', 'address', 'show'):
+        for address in dev.get('addr_info', []):
+            if ip in (address.get('local'), address.get('broadcast')):
+                raise CameraActivationError('새 IP가 이 ED의 주소 또는 브로드캐스트 주소입니다.')
+    if _cai_arp_probe(ip, old_route, dad=True)['replies']:
+        raise CameraActivationError('현재 카메라 LAN에서 새 IP에 ARP 응답이 있습니다. 다른 주소를 지정하세요.')
 
 
 def _cai_request(ip, route, method, path, body=None, expected_cert=None):
@@ -317,6 +332,10 @@ class CameraActivationManager:
         self._lock = _cai_threading.Lock()
         self._closed = False
 
+    def discard_plan(self, token):
+        with self._lock:
+            self._plans.pop(token, None)
+
     def close(self):
         with self._lock:
             self._closed = True
@@ -328,11 +347,19 @@ class CameraActivationManager:
         if not isinstance(payload, dict):
             raise CameraActivationError('초기 설정 입력 형식이 올바르지 않습니다.')
         ip = _cai_ip(payload.get('ip'))
+        expected_mac = _cai_mac(payload['expected_mac']) if 'expected_mac' in payload else None
+        if expected_cert is None and 'expected_cert_sha256' in payload:
+            expected_cert = payload['expected_cert_sha256']
+            if not isinstance(expected_cert, str) or not _cai_re.fullmatch(r'[0-9a-fA-F]{64}', expected_cert):
+                raise CameraActivationError('조회한 카메라의 인증서 정보를 확인하세요.')
+            expected_cert = expected_cert.lower()
         route = _cai_route(ip, payload.get('source'))
         status, cert = _cai_request(ip, route, 'GET', _CAI_STATUS, expected_cert=expected_cert)
         if type(status.get('Initialized')) is not bool:
             raise CameraActivationError('카메라 초기화 여부를 확인하지 못했습니다. 카메라 웹 화면에서 확인하세요.')
         mac = _cai_neighbor(ip, route)
+        if expected_mac is not None and mac != expected_mac:
+            raise CameraActivationError('선택한 포트의 MAC과 현재 카메라 MAC이 다릅니다. 중복 IP·포트 연결을 다시 확인하세요.')
         policy = _cai_policy(status)
         key = status.get('PublicKey')
         if status['Initialized'] is False and (not isinstance(key, str) or 'PUBLIC KEY' not in key):

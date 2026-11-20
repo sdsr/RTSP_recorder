@@ -10,8 +10,10 @@ import secrets as _sm_secrets
 import shutil as _sm_shutil
 import socket as _sm_socket
 import subprocess as _sm_subprocess
+import sys as _sm_sys
 import threading as _sm_threading
 import time as _sm_time
+from contextlib import contextmanager as _sm_contextmanager
 
 
 class SwitchManagerError(ValueError):
@@ -190,7 +192,7 @@ def _sm_route(connection, target=None, source=None):
     if len(addresses) != 1 or source not in [row.get('local') for row in addresses[0].get('addr_info', []) if row.get('family') == 'inet']:
         raise SwitchManagerError('지정한 소스 IP가 관리 NIC에 없습니다. 이 화면은 PC IP·Netplan을 변경하지 않습니다.')
     routes = _sm_ip_json('-4', 'route', 'get', target, 'from', source)
-    if len(routes) != 1 or routes[0].get('dev') != interface or routes[0].get('gateway') or routes[0].get('type') in ('local', 'unreachable', 'blackhole', 'prohibit'):
+    if len(routes) != 1 or routes[0].get('dev') != interface or routes[0].get('gateway') or routes[0].get('type') in ('local', 'broadcast', 'unreachable', 'blackhole', 'prohibit'):
         raise SwitchManagerError('허브로 가는 직접 enp2 경로가 없습니다. LTE 기본 경로를 사용하지 않습니다.')
     if target == source:
         raise SwitchManagerError('허브 주소와 ED 소스 주소는 달라야 합니다.')
@@ -246,12 +248,102 @@ def _sm_link_parent(interface, links):
     return None
 
 
+def _sm_local_interfaces():
+    """Offer only already configured enp2 addresses; never create a route/IP."""
+    links = _sm_ip_json('-d', 'link', 'show')
+    by_name = {row['ifname'].split('@')[0]: row for row in links}
+    result = []
+    for row in _sm_ip_json('-4', 'address', 'show'):
+        interface = row.get('ifname', '').split('@')[0]
+        parent = _sm_link_parent(interface, links)
+        if not parent:
+            continue
+        for address in row.get('addr_info', []):
+            if address.get('family') != 'inet':
+                continue
+            try:
+                source = _sm_ip(address.get('local'))
+                prefixlen = int(address['prefixlen'])
+                network = str(_sm_ipaddress.IPv4Network(source + '/' + str(prefixlen), strict=False))
+                mac = _sm_mac(row.get('address') or by_name.get(interface, {}).get('address'))
+            except (SwitchManagerError, ValueError, KeyError):
+                continue
+            info = by_name.get(interface, {}).get('linkinfo', {})
+            vlan = info.get('info_data', {}).get('id') if info.get('info_kind') == 'vlan' else None
+            result.append({'interface': interface, 'source': source, 'prefixlen': prefixlen,
+                           'network': network, 'parent': parent, 'mac': mac, 'vlan': vlan,
+                           'parent_mac': by_name[parent].get('address'),
+                           'active': 'UP' in by_name.get(interface, {}).get('flags', [])})
+    return result
+
+
+def _sm_neighbor_devices(parent, excluded_ips):
+    """Bounded existing cache inventory; these rows are observations, not scans."""
+    links = _sm_ip_json('-d', 'link', 'show')
+    candidates, seen = [], set(excluded_ips)
+    for link in links:
+        interface = link.get('ifname', '').split('@')[0]
+        if _sm_link_parent(interface, links) != parent:
+            continue
+        for row in _sm_ip_json('-4', 'neigh', 'show', 'dev', interface):
+            try:
+                ip = _sm_ip(row.get('dst'))
+                _sm_mac(row.get('lladdr'))
+            except SwitchManagerError:
+                continue
+            if ip in seen:
+                continue
+            seen.add(ip)
+            candidates.append({'id': 'neighbor-' + ip, 'name': '이웃 장치', 'ip': ip, 'kind': 'neighbor'})
+            if len(candidates) >= 128:
+                return _sm_camera_neighbors(candidates, parent)
+    return _sm_camera_neighbors(candidates, parent) if candidates else []
+
+
+def _sm_candidate_ips(payload):
+    values = payload.get('candidate_ips', [])
+    if not isinstance(values, list) or len(values) > 4:
+        raise SwitchManagerError('찾을 카메라 IP는 최대 4개까지 개별 주소로 입력하세요.')
+    return list(dict.fromkeys(_sm_ip(value) for value in values))
+
+
+def _sm_discover_candidates(ips, parent):
+    """ARP only named targets after validating their direct enp2 path twice."""
+    cameras = [{'id': 'candidate-' + ip, 'name': '직접 찾은 장치', 'ip': ip, 'kind': 'candidate'} for ip in ips]
+    observations = _sm_camera_neighbors(cameras, parent) if cameras else []
+    for item in observations:
+        # Cached entries must never masquerade as a successful fresh lookup.
+        item.update(neighbors=[], probe_fresh=False, probe_checked=False, probe_error='')
+        if item.get('route_error'):
+            continue
+        try:
+            route = _sm_route({'target': item['ip'], 'source': item.get('source'), 'interface': item['interface']})
+            if route['parent'] != parent:
+                raise SwitchManagerError('선택한 허브와 같은 enp2 NIC의 경로가 아닙니다.')
+            probe = globals().get('_cai_arp_probe')
+            if not callable(probe):
+                raise SwitchManagerError('ARP 검사 구성요소가 없습니다. 프로그램을 전체 업데이트하세요.')
+            item['probe_checked'] = True
+            reply = probe(item['ip'], route)
+            if reply.get('replies', 0) < 2 or not reply.get('mac'):
+                item['probe_error'] = '동일 MAC의 ARP 응답을 2회 이상 받지 못했습니다. 이전 캐시로 포트를 확정하지 않습니다.'
+                continue
+            item.update(probe_fresh=True, source=route['source'],
+                        neighbors=[{'mac': _sm_mac(reply['mac']), 'state': ['ARP_REPLY']}])
+        except ValueError as exc:
+            # Shared ARP helper contains only interface/probe errors, not credentials.
+            item['probe_error'] = str(exc) if type(exc).__name__ in ('SwitchManagerError', 'CameraActivationError') else 'ARP 검사를 완료하지 못했습니다.'
+        except (OSError, _sm_subprocess.SubprocessError):
+            item['probe_error'] = 'ARP 검사를 완료하지 못했습니다.'
+    return observations
+
+
 def _sm_camera_neighbors(cameras, parent):
     """Read routes and existing neighbor cache only: no ping, ARP or IP changes."""
     links = _sm_ip_json('-d', 'link', 'show')
     cache, result = {}, []
     for camera in cameras:
-        item = dict(camera, interface=None, neighbors=[], route_error='')
+        item = dict(camera, interface=None, source=None, neighbors=[], route_error='')
         if not camera['ip']:
             item['route_error'] = '등록된 카메라 주소가 IPv4 주소가 아닙니다.'
             result.append(item)
@@ -262,7 +354,8 @@ def _sm_camera_neighbors(cameras, parent):
                 raise SwitchManagerError('카메라 경로가 단일 경로가 아닙니다.')
             route, interface = routes[0], routes[0].get('dev')
             item['interface'] = interface
-            if route.get('gateway') or route.get('type') in ('local', 'unreachable', 'blackhole', 'prohibit') or _sm_link_parent(interface, links) != parent:
+            item['source'] = route.get('prefsrc') or route.get('src')
+            if route.get('gateway') or route.get('type') in ('local', 'broadcast', 'unreachable', 'blackhole', 'prohibit') or _sm_link_parent(interface, links) != parent:
                 raise SwitchManagerError('이 허브와 같은 enp2 NIC의 직접 경로가 아닙니다. 다른 NIC·LTE·게이트웨이 경로는 대조하지 않습니다.')
             if interface not in cache:
                 cache[interface] = _sm_ip_json('-4', 'neigh', 'show', 'dev', interface)
@@ -291,11 +384,13 @@ def _sm_camera_matches(observations, fdb, ports, ed_ports):
             ip_counts[camera['ip']] = ip_counts.get(camera['ip'], 0) + 1
     for camera in observations:
         match = {key: camera[key] for key in ('id', 'name', 'ip', 'interface')}
+        match.update(source=camera.get('source'), kind=camera.get('kind', 'camera'),
+                     probe_fresh=bool(camera.get('probe_fresh')), probe_checked=bool(camera.get('probe_checked')))
         match.update(mac=None, mac_candidates=[], neighbor_state=[], ports=[], direct_port=None,
                      status='unresolved', reason='', fdb_entries=[])
         neighbors = camera.get('neighbors', [])
         match['neighbor_state'] = sorted({state for row in neighbors for state in row['state']})
-        known_states = {'REACHABLE', 'STALE', 'DELAY', 'PROBE', 'PERMANENT', 'NOARP'}
+        known_states = {'REACHABLE', 'STALE', 'DELAY', 'PROBE', 'PERMANENT', 'NOARP', 'ARP_REPLY'}
         valid = [row for row in neighbors if row['mac'] and row['state'] and set(row['state']).issubset(known_states)]
         macs = sorted({row['mac'] for row in valid})
         match['mac_candidates'] = macs
@@ -305,6 +400,8 @@ def _sm_camera_matches(observations, fdb, ports, ed_ports):
             match['ports'] = sorted({row['port'] for row in match['fdb_entries']})
         if camera.get('route_error'):
             match.update(status='off_network', reason=camera['route_error'])
+        elif camera.get('probe_error'):
+            match.update(status='probe_failed', reason=camera['probe_error'])
         elif ip_counts.get(camera['ip'], 0) > 1:
             match.update(status='ambiguous', reason='같은 IP가 여러 카메라 항목에 등록되어 있습니다. 어느 실제 카메라인지 구분할 수 없습니다.')
         elif len(macs) > 1:
@@ -316,7 +413,11 @@ def _sm_camera_matches(observations, fdb, ports, ed_ports):
         elif not match['ports']:
             match['reason'] = 'ARP 캐시의 MAC이 현재 허브 MAC 학습표에 없습니다.'
         else:
-            port = by_port[match['ports'][0]]
+            port = by_port.get(match['ports'][0])
+            if not port:
+                match['reason'] = 'MAC 학습 포트의 현재 상태를 확인하지 못했습니다.'
+                matches.append(match)
+                continue
             if port['port'] >= 9 or port['mode'] != 'access' or port['port'] in ed_ports:
                 match.update(status='uplink', reason='광·업링크·ED 경로에서 학습된 MAC입니다. 이 포트를 카메라 직결 포트로 판단하지 않습니다.')
             elif len(port.get('macs', [])) != 1:
@@ -326,9 +427,10 @@ def _sm_camera_matches(observations, fdb, ports, ed_ports):
             elif len({row['vlan'] for row in match['fdb_entries']}) != 1 or match['fdb_entries'][0]['vlan'] != port['pvid']:
                 match.update(status='ambiguous', reason='MAC 학습 VLAN과 포트 VLAN이 단일 값으로 일치하지 않습니다.')
             else:
-                recent = bool(valid) and all(row['state'] == ['REACHABLE'] for row in valid)
+                recent = camera.get('probe_fresh') or (bool(valid) and all(row['state'] == ['REACHABLE'] for row in valid))
                 match.update(direct_port=port['port'], status='matched' if recent else 'cached',
-                             reason=('ARP 캐시가 REACHABLE이고 같은 MAC이 단일 Access 포트에서 학습되었습니다.' if recent else
+                             reason=('지정한 enp2 경로에서 새 ARP 응답을 받고 같은 MAC이 단일 Access 포트에서 학습되었습니다.' if camera.get('probe_fresh') else
+                                     'ARP 캐시가 REACHABLE이고 같은 MAC이 단일 Access 포트에서 학습되었습니다.' if recent else
                                      '이전 ARP/정적 캐시와 현재 MAC 학습표가 일치합니다. 현재 카메라 응답을 확인한 결과는 아닙니다.') +
                                     ' 학습 포트이며, 물리적 직결·IP 중복 부재를 보장하지 않습니다.')
         matches.append(match)
@@ -343,6 +445,31 @@ def _sm_camera_matches(observations, fdb, ports, ed_ports):
             match.update(status='ambiguous', direct_port=None,
                          reason='서로 다른 카메라 IP가 같은 MAC으로 관측됩니다. 주소 별칭·중복 등록·프록시 여부를 확인해야 합니다.')
     return matches
+
+
+def _sm_connected_devices(snapshot, matches, local_interfaces):
+    """Attach learned devices to ports without calling every MAC a camera."""
+    for port in snapshot['ports']:
+        devices = []
+        for mac in port.get('macs', []):
+            if mac == snapshot['route']['local_mac']:
+                addresses = sorted({row['source'] for row in local_interfaces
+                                    if row['parent'] == snapshot['route']['parent'] and row['mac'] == mac})
+                devices.append({'kind': 'ed', 'name': '이 ED / PC', 'ip': snapshot['route']['source'],
+                                'ips': addresses or [snapshot['route']['source']], 'mac': mac,
+                                'interface': snapshot['route']['dev'], 'source': snapshot['route']['source'],
+                                'status': 'local', 'learned_port': port['port'], 'direct_port': None,
+                                'reason': '이 PC의 NIC MAC이 학습된 포트입니다. 관리 연결 보호 대상입니다.'})
+                continue
+            related = [match for match in matches if match['mac'] == mac and port['port'] in match['ports']]
+            for match in related:
+                devices.append(dict(match, learned_port=port['port'], ips=[match['ip']]))
+            if not related:
+                devices.append({'kind': 'unknown', 'name': 'IP 미확인 장치', 'ip': '', 'ips': [], 'mac': mac,
+                                'interface': None, 'source': None, 'status': 'learned',
+                                'learned_port': port['port'], 'direct_port': None,
+                                'reason': 'MAC만 학습되었습니다. IP나 카메라 여부는 확인되지 않았으며 하위 장비일 수 있습니다.'})
+        port['connected_devices'] = devices
 
 
 class _SwitchTelnet:
@@ -524,7 +651,8 @@ class SwitchManager:
 
     config_path is a separate switches.json path, never recording.json. Passwords
     are supplied per request, retained only during that request and never saved.
-    No command changes host addresses, routes, Netplan, LTE, PoE, ring or uplinks.
+    ED management-network setup is a separate, explicit operation on the VLAN
+    child of a camera NIC. Switch reads and writes never configure the host.
     """
     def __init__(self, config_path, cameras_provider=None):
         self.config_path = _sm_Path(config_path)
@@ -537,20 +665,26 @@ class SwitchManager:
         self._sleep = _sm_time.sleep
         self._cameras_provider = cameras_provider
         self._camera_neighbors = _sm_camera_neighbors
+        self._neighbor_devices = _sm_neighbor_devices
+        self._discover_candidates = _sm_discover_candidates
+        self._local_interfaces = _sm_local_interfaces
 
-    def _map_cameras(self, snapshot, raw):
+    def _map_cameras(self, snapshot, raw, candidate_observations=None):
         snapshot['camera_matches'] = []
+        snapshot['candidate_matches'] = []
+        snapshot['device_matches'] = []
         snapshot['camera_mapping_warnings'] = []
-        snapshot['camera_mapping_note'] = ('기존 ARP 캐시와 현재 허브 MAC 학습표를 대조한 결과입니다. '
-                                           '새 핑·ARP 검사는 하지 않으며, IP 중복 부재나 카메라의 물리적 직결을 보장하지 않습니다. '
+        snapshot['discovery_warnings'] = []
+        snapshot['camera_mapping_note'] = ('등록 카메라·기존 이웃 캐시·허브 MAC 학습표를 대조합니다. '
+                                           '별도로 찾기를 요청한 IP만 enp2에서 새 ARP 검사를 합니다. '
+                                           '학습 포트는 물리적 직결이나 IP 중복 부재를 보장하지 않습니다. '
                                            '카메라 포트 등록·제어 대상은 자동 변경하지 않습니다.')
-        if self._cameras_provider is None:
-            return
+        candidate_observations = candidate_observations or []
+        cameras, observations = [], []
         try:
-            registered = self._cameras_provider()
+            registered = self._cameras_provider() if self._cameras_provider else []
             if not isinstance(registered, (list, tuple)) or len(registered) > 256:
                 raise SwitchManagerError('카메라 목록은 최대 256개의 IP 항목이어야 합니다.')
-            cameras = []
             for index, camera in enumerate(registered):
                 if not isinstance(camera, dict):
                     raise SwitchManagerError('카메라 목록 형식을 확인하지 못했습니다.')
@@ -561,17 +695,40 @@ class SwitchManager:
                 cameras.append({'id': str(camera.get('id', index))[:200],
                                 'name': str(camera.get('name') or camera.get('id') or index)[:200], 'ip': ip})
             observations = self._camera_neighbors(cameras, snapshot['route']['parent']) if cameras else []
-            fdb = _sm_fdb_entries(raw['show mac-address-table'])
-            matches = _sm_camera_matches(observations, fdb, snapshot['ports'], snapshot['ed_ports'])
-            snapshot['camera_matches'] = matches
-            for match in matches:
-                if match['direct_port'] is not None:
-                    port = next(row for row in snapshot['ports'] if row['port'] == match['direct_port'])
-                    port['cameras'].append({key: match[key] for key in ('id', 'name', 'ip', 'status', 'reason')})
         except Exception:
             # Mapping is supplementary evidence. A camera settings error must not
             # conceal switch state or leak RTSP credential-bearing exceptions.
             snapshot['camera_mapping_warnings'].append('카메라 목록 또는 이웃 캐시를 읽지 못해 카메라-포트 대조를 완료하지 못했습니다.')
+        candidate_ips = {row['ip'] for row in candidate_observations}
+        # A registered address explicitly probed remains one observation. Do not
+        # manufacture duplicate-IP ambiguity by adding it a second time.
+        for candidate in candidate_observations:
+            registered = [row for row in observations if row['ip'] == candidate['ip']]
+            if registered:
+                for row in registered:
+                    row.update({key: value for key, value in candidate.items() if key not in ('id', 'name', 'kind')})
+            else:
+                observations.append(candidate)
+            if candidate.get('probe_error') or candidate.get('route_error'):
+                snapshot['discovery_warnings'].append(candidate['ip'] + ': ' + (candidate.get('probe_error') or candidate['route_error']))
+        try:
+            observations.extend(self._neighbor_devices(snapshot['route']['parent'], {row['ip'] for row in observations}))
+        except Exception:
+            snapshot['camera_mapping_warnings'].append('추가 이웃 장치 목록을 읽지 못했습니다.')
+        fdb = _sm_fdb_entries(raw['show mac-address-table'])
+        matches = _sm_camera_matches(observations, fdb, snapshot['ports'], snapshot['ed_ports'])
+        snapshot['device_matches'] = matches
+        snapshot['camera_matches'] = [row for row in matches if row['kind'] == 'camera']
+        snapshot['candidate_matches'] = [row for row in matches if row['ip'] in candidate_ips]
+        for match in matches:
+            if match['direct_port'] is not None and match['kind'] == 'camera':
+                port = next(row for row in snapshot['ports'] if row['port'] == match['direct_port'])
+                port['cameras'].append({key: match[key] for key in ('id', 'name', 'ip', 'status', 'reason')})
+        try:
+            interfaces = self._local_interfaces()
+        except Exception:
+            interfaces = []
+        _sm_connected_devices(snapshot, matches, interfaces)
 
     def _begin_operation(self, busy_message):
         if not self._operation_lock.acquire(False):
@@ -612,9 +769,23 @@ class SwitchManager:
         except (OSError, ValueError, TypeError):
             raise SwitchManagerError('허브 설정 파일을 읽지 못했습니다.') from None
 
-    def get_config(self):
+    def get_config(self, include_network=False):
         with self._state_lock:
-            return self._load()
+            result = self._load()
+        if include_network:
+            result.update(local_interfaces=[], connection_health=[], network_warnings=[])
+            try:
+                result['local_interfaces'] = self._local_interfaces()
+            except SwitchManagerError:
+                result['network_warnings'].append('현재 enp2 주소를 읽지 못했습니다.')
+            for connection in result['switches']:
+                health = {'switch_id': connection['id'], 'route_ready': False, 'route_error': ''}
+                try:
+                    health.update(route_ready=True, route=self._route(connection))
+                except SwitchManagerError as exc:
+                    health['route_error'] = str(exc)
+                result['connection_health'].append(health)
+        return result
 
     def _validate_connection(self, payload):
         if not isinstance(payload, dict):
@@ -651,6 +822,47 @@ class SwitchManager:
         self._begin_operation('허브 작업 중에는 연결 설정을 저장할 수 없습니다.')
         try:
             return self._save_connection(payload)
+        finally:
+            self._operation_lock.release()
+
+    def setup_network(self, payload):
+        """Configure this ED's NetworkManager profile, then bind the saved row to it."""
+        self._begin_operation('다른 허브 작업이 진행 중입니다. 완료 후 다시 시도하세요.')
+        try:
+            saved = self._connection(payload)
+            parent = payload.get('parent')
+            if not isinstance(parent, str) or not _sm_re.fullmatch(r'enp2[0-9A-Za-z]*', parent):
+                raise SwitchManagerError('카메라용 enp2 물리 포트를 선택하세요.')
+            interfaces = [n for n in self._local_interfaces() if n['parent'] == parent and n.get('parent_mac')]
+            if not interfaces:
+                raise SwitchManagerError('선택한 카메라 NIC가 이 ED에 있는지 확인하세요.')
+            mac = _sm_mac(interfaces[0]['parent_mac'])
+            vlan = _sm_int(payload.get('vlan'), 1, 4094, '관리 VLAN')
+            source = _sm_ip(payload.get('source'))
+            if source == saved['target']:
+                raise SwitchManagerError('ED 관리 접속 IP와 허브 IP는 서로 달라야 합니다.')
+            # Run the bundled helper as this user. NetworkManager owns system
+            # authorization. Never run an elevated Python/web server or pass a password.
+            command = [_sm_sys.executable, '-I', '-c', embedded_text(EMBEDDED_SWITCH_NETWORK),
+                       '--apply', '--parent', parent, '--parent-mac', mac, '--vlan', str(vlan),
+                       '--source', source, '--target', saved['target']]
+            proc = _sm_subprocess.run(command, stdin=_sm_subprocess.DEVNULL, capture_output=True, text=True)
+            try:
+                report = _sm_json.loads(proc.stdout)
+                if not isinstance(report, dict):
+                    raise ValueError()
+            except ValueError:
+                raise SwitchManagerError('ED 관리 경로 설정 도구에서 결과를 받지 못했습니다. 접속 상태를 다시 확인하세요.') from None
+            if proc.returncode or report.get('status') != 'ready':
+                raise SwitchManagerError(str(report.get('message') or 'ED 관리 경로를 구성하지 못했습니다.')[:600])
+            if report.get('target') != saved['target'] or report.get('source') != source:
+                raise SwitchManagerError('관리 경로 확인 결과와 요청한 주소가 일치하지 않습니다.')
+            connection = self._validate_connection(dict(saved, source=source, interface=report.get('interface')))
+            if self._route(connection)['parent'] != parent:
+                raise SwitchManagerError('준비된 관리 경로의 물리 포트를 확인하지 못했습니다.')
+            if connection != saved:
+                self._save_connection(connection)
+            return {'connection': connection, 'management_mac': report.get('management_mac'), 'status': 'ready'}
         finally:
             self._operation_lock.release()
 
@@ -703,13 +915,14 @@ class SwitchManager:
             raise SwitchManagerError('조회된 CPU MAC을 연결 설정에 저장한 뒤 변경 미리보기를 실행하세요.')
         return identity.get('model') == _SM_MODEL and identity.get('firmware') == _SM_FIRMWARE
 
-    def _snapshot(self, client, connection, route):
+    def _snapshot(self, client, connection, route, candidate_observations=None):
         identity = _sm_identity(client.command('show version'))
         supported = self._check_identity(identity, connection)
         result = {'switch_id': connection['id'], 'connection': dict(connection), 'identity': identity,
                   'route': route, 'supported': supported, 'ports': [], 'management': None,
                   'vlans': [], 'ed_ports': [], 'can_modify': False, 'warnings': [],
-                  'camera_matches': [], 'camera_mapping_warnings': []}
+                  'camera_matches': [], 'candidate_matches': [], 'device_matches': [],
+                  'camera_mapping_warnings': [], 'discovery_warnings': []}
         if not supported:
             result['warnings'].append('이 모델/펌웨어의 쓰기 명령은 검증되지 않았습니다. 장비 식별 정보만 조회했습니다.')
             return result, {}
@@ -780,7 +993,8 @@ class SwitchManager:
             result['ports'].append({'port': port, 'link': state.group(2).lower() if state else 'unknown',
                                     'admin_up': None if rows is None else 'shutdown' not in rows,
                                     'mode': mode, 'pvid': pvid, 'protected': bool(reasons), 'reasons': reasons,
-                                    'editable': not reasons, 'mac_count': len(macs), 'macs': sorted(macs), 'cameras': []})
+                                    'editable': not reasons, 'mac_count': len(macs), 'macs': sorted(macs),
+                                    'cameras': [], 'connected_devices': []})
         if not connection['expected_cpu_mac']:
             result['warnings'].append('CPU MAC을 저장하기 전에는 설정을 변경할 수 없습니다.')
         if not ed_known:
@@ -790,18 +1004,29 @@ class SwitchManager:
         if 'not configured' not in raw['show reload'].lower():
             result['warnings'].append('기존 재부팅 예약 상태를 확인해야 합니다. 이 도구는 재부팅을 예약하거나 취소하지 않습니다.')
         result['can_modify'] = bool(connection['expected_cpu_mac'] and ed_known and not result['warnings'])
-        self._map_cameras(result, raw)
+        self._map_cameras(result, raw, candidate_observations)
         return result, raw
 
     def inspect(self, payload):
         connection, password = self._connection(payload), self._password(payload)
+        candidate_ips = _sm_candidate_ips(payload)
         self._begin_operation('다른 허브 작업이 진행 중입니다. 완료 후 다시 조회하세요.')
         try:
             route = self._route(connection)
             with self._client_factory(connection, password) as client:
-                return self._snapshot(client, connection, route)[0]
+                candidates = self._discover_candidates(candidate_ips, route['parent']) if candidate_ips else []
+                return self._snapshot(client, connection, route, candidates)[0]
         finally:
             password = None
+            self._operation_lock.release()
+
+    @_sm_contextmanager
+    def observing_port(self, payload):
+        """Keep local switch operations serialized during camera identification or handover."""
+        self._begin_operation('다른 허브 작업이 진행 중입니다. 완료 후 포트를 다시 확인하세요.')
+        try:
+            yield self.inspect(payload)
+        finally:
             self._operation_lock.release()
 
     def _build_change(self, payload, snapshot, connection):

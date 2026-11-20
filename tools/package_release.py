@@ -18,7 +18,7 @@ def release_files(root):
         names.update(path.relative_to(root).as_posix() for path in root.glob(pattern) if path.is_file())
     for report in ('validation/validation_summary.json', 'validation/ip_filename_patch.json',
                    'validation/profile_live_patch.json', 'validation/window_snapshot_switch_patch.json',
-                   'validation/camera_admin_patch.json'):
+                   'validation/camera_admin_patch.json', 'validation/hub_network_patch.json'):
         if (root / report).is_file():
             names.add(report)
     paths = []
@@ -32,7 +32,7 @@ def release_files(root):
 
 def package(root, output, version):
     if not re.fullmatch(r'\d{4}-\d{2}-\d{2}-v\d+(?:\.\d+)*', version):
-        raise ValueError('Version must look like 2026-11-17-v2.5')
+        raise ValueError('Version must look like 2026-11-20-v2.6')
     template = json.loads((root / 'recording.portable.example.json').read_text(encoding='utf-8'))
     if template.get('cameras') != []:
         raise ValueError('The first-run template must not include any camera address or account')
@@ -75,7 +75,7 @@ def package(root, output, version):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', default='2026-11-17-v2.5')
+    parser.add_argument('--version', default='2026-11-20-v2.6')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]

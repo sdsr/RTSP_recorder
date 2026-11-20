@@ -499,6 +499,157 @@ def camera_setup_required(data):
     return isinstance(data, dict) and data.get("cameras") == []
 
 
+class PortCameraWorkflow:
+    """Bind a shared factory address to a freshly identified switch port for each operation."""
+    actions = {'identify', 'account', 'live', 'activation-plan', 'activation-apply', 'ip-plan', 'ip-apply'}
+
+    def __init__(self, controller):
+        self.controller = controller
+        self.bindings = {}
+
+    @staticmethod
+    def selection(data):
+        port, peers = data.get('port'), data.get('peer_ports')
+        if (data.get('isolated') is not True or type(port) is not int or not 1 <= port <= 8
+                or not isinstance(peers, list) or len(peers) > 7
+                or any(type(p) is not int or not 1 <= p <= 8 or p == port for p in peers)
+                or len(peers) != len(set(peers))):
+            raise ValueError('대상 LAN 포트와 같은 IP의 다른 포트를 선택하고 분리 상태를 확인하세요.')
+        return port, tuple(sorted(peers)), _cai_ip(data.get('ip'))
+
+    @staticmethod
+    def observation(snapshot, port, peers, ip):
+        ed = snapshot.get('ed_ports', [])
+        if not snapshot.get('supported') or len(ed) != 1 or ed[0] not in range(1, 9):
+            raise ValueError('지원 허브와 ED의 연결 포트를 확인할 수 없습니다. 허브를 다시 조회하세요.')
+        ports = {row['port']: row for row in snapshot['ports']}
+        allowed = snapshot['connection']['camera_ports']
+        for number in (port, *peers):
+            row = ports.get(number)
+            if number == ed[0] or number not in allowed or not row or row.get('mode') != 'access':
+                raise ValueError(f'{number}번은 등록된 카메라 Access 포트로 확인되지 않았습니다.')
+        target = ports[port]
+        if not snapshot.get('can_modify') or not target.get('editable'):
+            reasons = list(target.get('reasons', [])) + list(snapshot.get('warnings', []))
+            raise ValueError('허브와 카메라 포트 설정을 확인하세요. ' + (' / '.join(reasons) or '허브 상태 조회 후 장비 MAC을 등록하세요.'))
+        if target.get('admin_up') is not True or target.get('link') != 'up':
+            raise ValueError(f'{port}번 포트를 켜고 링크가 연결된 후 다시 확인하세요.')
+        for number in peers:
+            row = ports[number]
+            if row.get('admin_up') is not False and row.get('link') != 'down':
+                raise ValueError(f'같은 IP의 {number}번 포트가 아직 연결돼 있습니다. 해당 포트의 통신을 끈 뒤 다시 확인하세요.')
+        matches = [m for m in snapshot.get('candidate_matches', []) if m['ip'] == ip]
+        if len(matches) != 1 or matches[0].get('status') != 'matched' or not matches[0].get('probe_fresh'):
+            reason = (matches[0].get('reason') if len(matches) == 1 else '') or '새 ARP 응답과 단일 포트의 MAC 학습 정보를 확인하세요.'
+            raise ValueError(f'{ip}의 연결 포트를 확인할 수 없습니다. {reason}')
+        observed = matches[0]
+        if observed.get('direct_port') != port:
+            raise ValueError(f"{ip}의 응답이 선택한 {port}번과 다른 포트에서 관측됐습니다. 같은 IP 장치의 연결을 확인하세요.")
+        scope = (snapshot['switch_id'], snapshot['connection']['target'], _sm_mac(snapshot['identity']['cpu_mac']),
+                 ed[0], port, target['pvid'], peers, ip, _cai_mac(observed['mac']), observed['source'], observed['interface'])
+        return observed, scope
+
+    def drop_plan(self, binding):
+        plan = binding.pop('pending', None)
+        if plan:
+            manager = self.controller.camera_activation if plan['kind'] == 'activation' else self.controller.camera_admin
+            manager.discard_plan(plan['inner'])
+
+    def forget(self, key):
+        binding = self.bindings.pop(key, None)
+        if binding:
+            self.drop_plan(binding)
+
+    def run(self, action, data):
+        if action not in self.actions or self.controller.closing:
+            raise ValueError('요청한 포트 카메라 작업을 사용할 수 없습니다.')
+        port, peers, ip = self.selection(data)
+        now = time.monotonic()
+        for key, row in list(self.bindings.items()):
+            if now >= row['expires']:
+                self.forget(key)
+            elif row.get('pending') and now >= row['pending']['expires']:
+                self.drop_plan(row)
+        key = data.get('binding_id')
+        binding = self.bindings.get(key) if isinstance(key, str) else None
+        if action != 'identify' and (not binding or data.get('expected_cert_sha256') != binding['cert']
+                or _cai_mac(data.get('expected_mac')) != binding['mac']):
+            raise ValueError('포트 확인이 만료되었거나 선택이 달라졌습니다. 포트와 카메라 확인을 다시 누르세요.')
+        switch_request = dict(switch_id=data.get('switch_id'), password=data.get('switch_password'), candidate_ips=[ip])
+        with self.controller.switch_manager.observing_port(switch_request) as snapshot:
+            obs, scope = self.observation(snapshot, port, peers, ip)
+            if action != 'identify' and binding['scope'] != scope:
+                self.forget(key)
+                raise ValueError('허브·포트·카메라 MAC 또는 연결 경로가 바뀌었습니다. 포트를 다시 확인하세요.')
+            pins = dict(ip=ip, source=obs['source'], expected_mac=_cai_mac(obs['mac']))
+            if binding and action != 'identify':
+                pins['expected_cert_sha256'] = binding['cert']
+            status = self.controller.camera_activation.inspect(pins)
+            if (status['ip'] != ip or _cai_mac(status['mac']) != pins['expected_mac']
+                    or (status['source'], status['interface']) != (obs['source'], obs['interface'])
+                    or not re.fullmatch(r'[0-9a-f]{64}', status.get('cert_sha256', ''))
+                    or (action != 'identify' and status['cert_sha256'] != binding['cert'])):
+                raise ValueError('카메라 MAC·인증서 또는 경로가 포트 조회 결과와 다릅니다. 다시 확인하세요.')
+            if action == 'identify':
+                for old, row in list(self.bindings.items()):
+                    if row['scope'][:5] == scope[:5]:
+                        self.forget(old)
+                if len(self.bindings) >= 32:
+                    self.forget(next(iter(self.bindings)))
+                key = secrets.token_urlsafe(24)
+                self.bindings[key] = dict(scope=scope, cert=status['cert_sha256'], mac=pins['expected_mac'],
+                                          profiles=(), previewed=False, expires=time.monotonic() + 1200)
+                return dict(status, port=port, binding_id=key)
+            if action.startswith('activation-'):
+                if status['initialized']:
+                    raise ValueError('이미 최초 비밀번호가 등록된 카메라입니다. 포트를 다시 확인하세요.')
+            elif not status['initialized']:
+                raise ValueError('영상을 열기 전에 카메라의 최초 관리자 비밀번호를 설정하세요.')
+            target = dict(pins, username=data.get('username'), password=data.get('password'))
+            if action == 'account':
+                self.drop_plan(binding)
+                binding.update(profiles=(), previewed=False)
+                result = self.controller.camera_admin.inspect_candidate(target)
+                binding['profiles'] = tuple(str(p['id']) for p in result.get('profiles', [])
+                    if re.sub(r'[^A-Z0-9]', '', str(p.get('EncodingType', '')).upper()) == 'H264')
+                return result
+            if action == 'live':
+                profile = str(data.get('profile', '2'))
+                if profile not in binding['profiles']:
+                    raise ValueError('계정 확인 후 카메라에서 제공하는 H.264 프로필을 선택하세요.')
+                result = self.controller.live_view.start_port(obs, target['username'], target['password'], profile)
+                binding['previewed'] = True
+                return result
+            kind, stage = action.split('-')
+            field = 'token' if kind == 'activation' else 'plan_id'
+            if stage == 'plan':
+                self.drop_plan(binding)
+                if kind == 'activation':
+                    result = self.controller.activation_action('preview', dict(pins, isolated=True))
+                else:
+                    if not binding['previewed']:
+                        raise ValueError('선택한 포트의 실시간 영상을 먼저 확인하세요.')
+                    result = self.controller.camera_admin.plan(dict(
+                        action='network', isolated=True, direct_target=target, expected_host=ip,
+                        expected_mac=pins['expected_mac'], expected_cert_sha256=binding['cert'],
+                        ip=data.get('new_ip'), netmask=data.get('netmask'), gateway=data.get('gateway') or '0.0.0.0',
+                        defer_reconnect=data.get('defer_reconnect', False)))
+                # The underlying general-purpose apply endpoints must not accept a port workflow's public token.
+                outer = secrets.token_urlsafe(32)
+                binding['pending'] = dict(kind=kind, inner=result[field], outer=outer, expires=time.monotonic() + 300)
+                return {**result, field: outer}
+            plan = binding.get('pending')
+            if data.get('confirm') is not True or not plan or plan['kind'] != kind or data.get(field) != plan['outer']:
+                raise ValueError('선택한 포트의 변경 내용을 다시 검토하고 적용을 확인하세요.')
+            try:
+                if kind == 'activation':
+                    return self.controller.activation_action('apply', dict(token=plan['inner'], new_password=data.get('new_password'),
+                                                                           confirm_password=data.get('confirm_password')))
+                return self.controller.camera_admin.apply(dict(plan_id=plan['inner'], confirm=True))
+            finally:
+                self.forget(key)
+
+
 class RecorderUiController:
     def __init__(self, config_path):
         self.config_path = Path(config_path).expanduser().resolve()
@@ -515,12 +666,16 @@ class RecorderUiController:
         self.closing = False
         self.cached_settings = None
         self.cached_revision = None
-        self.live_view = LiveViewManager(self.settings)
+        self.live_view = LiveViewManager(self.settings, lambda: live_view_port_settings(self.read_config()[0], self.config_path.parent))
         self.camera_snapshots = CameraSnapshotManager(self.settings, self.config_path)
+        self.port_observations = {}
+        self.port_observation_lock = threading.Lock()
+        self.port_observation_epoch = 0
         self.switch_manager = SwitchManager(self.config_path.parent / "switches.json", cameras_provider=self._switch_cameras)
         self.camera_profiles = CameraProfileManager(self)
         self.camera_admin = CameraAdminManager(self)
         self.camera_activation = CameraActivationManager(self.config_path)
+        self.port_cameras = PortCameraWorkflow(self)
         self.camera_ping = CameraPingMonitor(self.settings, self.config_path)
         self.shared_browser_server = None
 
@@ -530,6 +685,76 @@ class RecorderUiController:
             return []
         return [{"id": c.name, "name": c.name, "ip": urlsplit(c.url).hostname or ""}
                 for c in self.settings().cameras]
+
+    def switch_operation(self, operation, data):
+        # Starting any new read supersedes this switch's previous observation,
+        # even when the new query fails. Never cache a payload or a password.
+        switch_id = data.get("switch_id") if operation in ("inspect", "setup_network") else data.get("id")
+        with self.port_observation_lock:
+            self.port_observation_epoch += 1
+            epoch = self.port_observation_epoch
+            if operation == "apply":
+                self.port_observations.clear()
+            elif isinstance(switch_id, str):
+                self.port_observations.pop(switch_id, None)
+        started = time.monotonic()
+        observed_at = datetime.now(KST).isoformat(timespec="seconds")
+        result = getattr(self.switch_manager, operation)(data)
+        if operation != "inspect" or not result.get("supported"):
+            return result
+        identity = result.get("identity", {}).get("cpu_mac")
+        if not identity:
+            return result
+        devices = []
+        for match in result.get("candidate_matches", []):
+            if match.get("status") == "matched" and match.get("probe_fresh") and match.get("direct_port"):
+                devices.append({key: match[key] for key in ("ip", "mac", "source", "interface", "direct_port")})
+        if devices:
+            with self.port_observation_lock:
+                if epoch == self.port_observation_epoch:
+                    self.port_observations[switch_id] = dict(connection=dict(result["connection"]),
+                        identity=identity, route=dict(result["route"]), devices=devices,
+                        observed_at=observed_at, expires=started + 120)
+        return result
+
+    def camera_port_status(self, ip, mac):
+        ip, mac = _sm_ip(ip), _sm_mac(mac)
+        config = self.switch_manager.get_config(include_network=True)
+        health = {row["switch_id"]: row for row in config["connection_health"]}
+        switches, matches = [], []
+        with self.port_observation_lock:
+            for connection in config["switches"]:
+                switch_id = connection["id"]
+                state = health[switch_id]
+                switches.append(dict(id=switch_id, name=connection["name"], target=connection["target"],
+                                     ready=state["route_ready"], reason=state["route_error"]))
+                obs = self.port_observations.get(switch_id)
+                if not obs:
+                    continue
+                remaining = int(obs["expires"] - time.monotonic())
+                if (remaining <= 0 or not state["route_ready"] or connection != obs["connection"]
+                        or state.get("route") != obs["route"]
+                        or connection.get("expected_cpu_mac") not in (None, "", obs["identity"])):
+                    self.port_observations.pop(switch_id, None)
+                    continue
+                for device in obs["devices"]:
+                    if device["ip"] != ip or device["mac"] != mac:
+                        continue
+                    try:
+                        route = _sm_ip_json("-4", "route", "get", ip)
+                    except SwitchManagerError:
+                        route = []
+                    if (len(route) != 1 or route[0].get("gateway") or route[0].get("dev") != device["interface"]
+                            or route[0].get("prefsrc") != device["source"]):
+                        self.port_observations.pop(switch_id, None)
+                        break
+                    matches.append(dict(switch_id=switch_id, name=connection["name"], target=connection["target"],
+                                        port=device["direct_port"], observed_at=obs["observed_at"], expires_in=remaining))
+        return {"switches": switches, "matches": matches}
+
+    def port_camera_action(self, action, data):
+        with self.action_lock:
+            return self.port_cameras.run(action, data)
 
     def activation_action(self, action, data):
         if action not in ("inspect", "preview", "apply") or not isinstance(data, dict):
@@ -1346,8 +1571,10 @@ def make_ui_handler(controller, token, port):
                     self.end_headers()
                     if self.command != "HEAD":
                         self.wfile.write(content)
+                elif path == "/api/camera-port":
+                    self._json(controller.camera_port_status(self._query_value(query, "ip"), self._query_value(query, "mac")))
                 elif path == "/api/switch/config":
-                    self._json(controller.switch_manager.get_config())
+                    self._json(controller.switch_manager.get_config(include_network=True))
                 elif path == "/api/ping/history":
                     self._json(controller.camera_ping.history(self._query_value(query, "camera") or None,
                                int(self._query_value(query, "hours", "24"))))
@@ -1422,6 +1649,10 @@ def make_ui_handler(controller, token, port):
                         result = controller.camera_snapshots.capture(data.get("camera"), data.get("profile", "current"))
                 elif self.path == "/api/camera-admin/inspect":
                     result = controller.camera_admin.inspect(data)
+                elif self.path.startswith("/api/port-camera/"):
+                    result = controller.port_camera_action(self.path[len("/api/port-camera/"):], data)
+                elif self.path == "/api/camera-admin/inspect-candidate":
+                    result = controller.camera_admin.inspect_candidate(data)
                 elif self.path == "/api/camera-admin/plan":
                     result = controller.camera_admin.plan(data)
                 elif self.path == "/api/camera-admin/apply":
@@ -1435,13 +1666,15 @@ def make_ui_handler(controller, token, port):
                 elif self.path == "/api/camera-activation/apply":
                     result = controller.activation_action("apply", data)
                 elif self.path == "/api/switch/config":
-                    result = controller.switch_manager.save_connection(data)
+                    result = controller.switch_operation("save_connection", data)
                 elif self.path == "/api/switch/inspect":
-                    result = controller.switch_manager.inspect(data)
+                    result = controller.switch_operation("inspect", data)
+                elif self.path == "/api/switch/network-setup":
+                    result = controller.switch_operation("setup_network", data)
                 elif self.path == "/api/switch/plan":
                     result = controller.switch_manager.plan(data)
                 elif self.path == "/api/switch/apply":
-                    result = controller.switch_manager.apply(data)
+                    result = controller.switch_operation("apply", data)
                 elif self.path == "/api/ping/check":
                     result = controller.camera_ping.request_check()
                 elif self.path == "/api/camera-profiles/read":

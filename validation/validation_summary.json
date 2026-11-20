@@ -1,9 +1,9 @@
 {
-  "version": "2026-11-17-v2.5",
-  "validation_date_kst": "2026-11-17",
+  "version": "2026-11-20-v2.6",
+  "validation_date_kst": "2026-11-20",
   "environment": "Ubuntu 26.04 x86_64, Python 3.14, Tk 8.6; native Linux temporary filesystem",
   "unit_tests": {
-    "run": 527,
+    "run": 550,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -19,21 +19,8 @@
   "real_camera_recording_retested": false,
   "system_service_changed": false,
   "network_configuration_changed": false,
-  "elapsed_seconds": 24.87,
-  "recorder_sha256": "99dbd0e44bdb9ffadf8a6f5957647e889fc722ebf43cc3e2a65a40506b064606",
-  "browser_ui": {
-    "blank_initial_fields_verified": true,
-    "manual_camera_registration_saved": true,
-    "region_required_only_for_weather": true,
-    "manual_region_preserved": true,
-    "javascript_errors": 0,
-    "real_device_access": false
-  },
-  "camera_admin_ui": {
-    "empty_inventory_screen_verified": true,
-    "initialized_camera_account_blank_verified": true,
-    "device_access_mocked": true
-  },
-  "raw_packet_capabilities_changed": false,
-  "system_packages_installed": false
+  "elapsed_seconds": 25.48,
+  "recorder_sha256": "493edf389249cd7a2a1322440ad564441a961a411486ddd68c8de44057f99b08",
+  "hub_hardware_tests": "mocked",
+  "networkmanager_profile_applied": false
 }

@@ -4,6 +4,29 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ED 카메라 녹화</title>
 <style>
+/* Keep the viewing controls and the picture together on local desktop and mobile displays. */
+.monitor-controls{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(140px,1fr) auto auto;align-items:end;gap:10px;margin:14px 0 16px}
+#tab-live .monitor-panel,#tab-live .monitor-profiles{border-radius:10px}
+#tab-live .monitor-panel{padding:clamp(16px,2vw,26px)}
+.monitor-controls .field{margin:0}
+#tab-live #live-start{min-width:96px}
+#tab-live #live-display-home{margin:0 0 12px}
+.monitor-idle{display:grid;place-items:center;min-height:130px;height:min(27vh,210px);border-radius:7px;background:#162737;color:#d2dce6;font-size:.92rem}
+#live-display-home:has(#live-video-panel:not([hidden])) .monitor-idle{display:none}
+#live-display #live-video-panel{margin:0;padding:0;overflow:hidden;border:0;border-radius:7px;background:#101923}
+#live-display #live-video{margin:0;max-height:65vh}
+#live-display #live-note{margin:9px 0 0}#live-display #live-note:empty{display:none}
+#live-display #live-metrics{margin:8px 0 0;padding:8px 0;gap:16px;border-top:0}
+#live-display #live-metrics .fact{display:flex;align-items:baseline;flex-wrap:wrap;gap:7px}
+#live-display #live-metrics .fact b{font-size:1rem;font-variant-numeric:tabular-nums}
+#live-display #live-metrics-note{font-size:.77rem;margin:5px 0}
+#tab-live .monitor-profiles{padding:14px 20px}
+.monitor-profiles>summary{cursor:pointer;font-weight:650}
+.monitor-profiles[open]>div{padding:16px 0 6px}
+.workspace:has(#tab-live:not([hidden])) .mast,.workspace:has(#tab-switch:not([hidden])) .mast{margin-bottom:16px;padding-bottom:12px}
+body:has(#save-config:disabled):has(#tab-live:not([hidden]),#tab-switch:not([hidden])) .savebar{display:none}
+@media(max-width:900px){.monitor-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@media(max-width:500px){.monitor-controls{gap:7px}.monitor-controls .field{grid-column:1/-1}}
 :root{color-scheme:light;--ink:#182b43;--muted:#53657a;--line:#cdd7e3;--ground:#eef2f6;--paper:#fcfdff;--blue:#264e87;--soft:#e7eef8;--amber:#81541c;--red:#a13535;--radius:5px;font-family:"Noto Sans KR","Noto Sans CJK KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:16px}
 *{box-sizing:border-box}body{margin:0;background:var(--ground);color:var(--ink);line-height:1.6}button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);color:var(--ink);padding:10px 17px;font-weight:650;line-height:1.4;min-height:44px}button:hover{background:var(--soft);border-color:#93a9c7}button:disabled{opacity:.45;cursor:not-allowed}button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}button.danger{color:var(--red)}button.small{padding:7px 12px;font-size:.85rem;min-height:38px}button.ghost{border-color:transparent;background:transparent}a{color:var(--blue);text-underline-offset:3px}input,select,textarea{width:100%;min-height:46px;border:1px solid #aebdce;background:var(--paper);color:var(--ink);border-radius:var(--radius);padding:9px 11px}input[type=checkbox],input[type=radio]{width:19px;height:19px;min-height:0;accent-color:var(--blue);flex:0 0 auto}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid #c28c41;outline-offset:3px}textarea{resize:vertical;line-height:1.7}[hidden]{display:none!important}.shell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}.sidebar{background:#1d304c;color:#f0f4fb;padding:38px 24px;display:flex;flex-direction:column}.wordmark{letter-spacing:.14em;font-size:.78rem;font-weight:800}.brand{font-size:1.7rem;font-weight:750;line-height:1.35;margin:18px 0 42px}.sidebar nav{display:grid;gap:8px}.sidebar nav button{border:0;text-align:left;background:transparent;color:#c9d6e8;padding:13px 14px}.sidebar nav button[aria-selected=true]{background:#314d72;color:#fff}.side-foot{margin-top:auto;padding-top:60px;color:#becbdf;font-size:.78rem}.workspace{max-width:1340px;width:100%;padding:35px clamp(20px,4vw,62px) 140px}.mast{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:1px solid var(--line);padding-bottom:25px;margin-bottom:26px}.eyebrow{color:var(--muted);font-size:.75rem;letter-spacing:.1em;font-weight:750}.mast h1{margin:5px 0 0;font-size:clamp(1.7rem,2.5vw,2.3rem);line-height:1.3;letter-spacing:-.045em}.clock{font-size:.85rem;color:var(--muted);text-align:right;padding-top:10px}.clock strong{display:block;color:var(--ink);font-size:1rem}.notice{padding:15px 18px;background:#fff1df;color:#714b1d;border:1px solid #dfc49d;border-radius:var(--radius);margin-bottom:20px;overflow-wrap:anywhere}.notice.error{background:#fcecec;color:#8f2c2c;border-color:#e7baba}.notice.ok{background:var(--soft);color:#234b7a;border-color:#b5c8e4}.status-line{display:flex;gap:24px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:5px 0 30px}.status-label{font-size:1.75rem;letter-spacing:-.035em;font-weight:750}.status-label:before{content:"";display:inline-block;width:11px;height:11px;border-radius:50%;background:#7890aa;margin-right:12px}.status-label.live:before{background:#315fa3}.sub{color:var(--muted);font-size:.9rem;margin-top:5px}.actions{display:flex;gap:9px;flex-wrap:wrap}.facts{display:flex;flex-wrap:wrap;gap:30px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:17px 0;margin-bottom:32px}.fact b{font-size:1.1rem}.fact span{font-size:.83rem;color:var(--muted);margin-right:12px}.split{display:grid;grid-template-columns:1.1fr 1fr;gap:32px}.section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}.section-title h2,h2{font-size:1.2rem;margin:0;letter-spacing:-.025em}.caption{color:var(--muted);font-size:.84rem;margin:7px 0 16px}.schedule-view{border-top:2px solid var(--ink)}.schedule-item{display:flex;justify-content:space-between;gap:15px;padding:17px 2px;border-bottom:1px solid var(--line)}.schedule-item .range{font-weight:750;letter-spacing:.01em}.tag{display:inline-flex;align-items:center;padding:3px 10px;background:var(--soft);color:#34567f;border-radius:3px;font-size:.77rem;white-space:nowrap}.weather-box{border:1px solid var(--line);background:var(--paper);padding:23px}.weather-head{font-size:1.25rem;font-weight:750;line-height:1.4}.weather-detail{font-size:.88rem;color:var(--muted);margin:12px 0}.source{font-size:.75rem;color:var(--muted)}.hourly{display:flex;gap:0;overflow:auto;margin:16px -8px 0}.hour{min-width:70px;text-align:center;border-right:1px solid var(--line);padding:7px 9px;font-size:.76rem}.hour:last-child{border:0}.hour strong{display:block;font-size:.87rem;margin:5px 0}.test-box{margin-top:35px;padding:24px 27px;background:#e2e9f3}.test-controls{display:grid;grid-template-columns:minmax(180px,1fr) 100px 130px 135px auto;gap:12px;align-items:end;margin-top:18px}.label{display:block;font-size:.87rem;font-weight:650;margin-bottom:7px}.unit{display:flex;align-items:center;gap:8px}.test-controls button{justify-self:end}.logs{margin-top:30px;border-top:1px solid var(--line);padding-top:16px}summary{cursor:pointer;font-weight:650}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#182b43;color:#e3eaf5;font:12px/1.7 "Cascadia Code",Consolas,monospace;padding:16px;max-height:250px;overflow:auto}.panel{background:var(--paper);padding:27px 30px;border:1px solid var(--line);margin-bottom:24px}.panel h2{margin-bottom:8px}.form-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}.form-row.three{grid-template-columns:repeat(3,1fr)}.field{min-width:0}.field .hint{display:block;color:var(--muted);font-size:.78rem;margin-top:6px}.inline{display:flex;align-items:center;gap:10px}.inline input{min-width:0}.inline button{flex-shrink:0}.switch{display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:650;margin:15px 0}.checks{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0}.checks label{display:flex;gap:7px;align-items:center}.schedule-edit{display:grid;gap:10px;margin:18px 0}.time-row{display:grid;grid-template-columns:1fr 20px 1fr auto;align-items:center;gap:10px}.time-row button{font-size:1.25rem;min-width:44px;padding:6px;line-height:1}.time-row>span{text-align:center;color:var(--muted)}.dates{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.date-chip{font-size:.85rem;background:var(--soft);padding:6px 10px;display:flex;align-items:center;gap:7px}.date-chip button{padding:0 5px;min-height:24px;border:none;background:transparent}.date-entry{max-width:370px;display:flex;gap:10px}.rule-explain{background:var(--soft);padding:15px 17px;margin:18px 0;color:#2d4e78;font-size:.88rem}.key-status{margin:12px 0;font-size:.88rem;color:var(--muted)}.camera-list{display:flex;gap:10px;flex-wrap:wrap}.camera{padding:9px 13px;border:1px solid var(--line);font-size:.85rem}.path{font-size:.8rem;overflow-wrap:anywhere;color:var(--muted)}.savebar{position:fixed;bottom:0;left:220px;right:0;background:#f6f8fc;border-top:1px solid #bfcddb;padding:15px clamp(20px,4vw,62px);display:flex;justify-content:space-between;align-items:center;gap:15px;z-index:5}.savebar .actions{flex-wrap:nowrap}.save-state{font-size:.85rem;color:var(--muted)}.advanced{margin-top:20px}.region-note{font-size:.78rem;color:var(--muted);margin-top:10px}
 @media(max-width:1100px){.test-camera-field{grid-column:1/-1}.split{grid-template-columns:1fr}.test-controls{grid-template-columns:100px 1fr 1fr}.test-controls button{grid-column:1/-1;justify-self:stretch}.sidebar{padding:28px 16px}.shell{grid-template-columns:185px minmax(0,1fr)}.savebar{left:185px}.form-row.three{grid-template-columns:1fr}.workspace{padding-left:25px;padding-right:25px}}
@@ -14,12 +37,100 @@
 @media(max-width:720px){.sidebar nav{display:grid;grid-template-columns:1fr 1fr;gap:5px}.sidebar nav button{text-align:center}.calendar{padding:12px}.calendar-head{flex-wrap:wrap}.calendar-grid{gap:3px}.calendar-day{min-height:40px}.calendar-tools{flex-wrap:wrap}.library-header{align-items:flex-start;flex-direction:column}.library-filters{grid-template-columns:1fr}.library-table-wrap{overflow:visible}.file-table thead{display:none}.file-table tbody,.file-table tr,.file-table td{display:block}.file-table tr{padding:13px 0;border-bottom:1px solid var(--line)}.file-table td,.file-table td:first-child{padding:4px 0;border:0}.file-table .file-name{min-width:0;max-width:none;font-size:.94rem;margin-bottom:6px}.file-table td[data-label]::before{content:attr(data-label) ' ';display:inline-block;min-width:75px;color:var(--muted)}.file-actions{margin-top:9px}.file-actions button,.file-actions a{min-height:39px;padding:7px 12px}.library-pages{align-items:flex-start;flex-direction:column}.library-pages .actions{width:100%}.library-pages button{flex:1}.video-panel{padding:14px}}
 .confirm-dialog{width:min(510px,calc(100% - 32px));border:1px solid var(--line);border-radius:8px;padding:26px;color:var(--ink);background:var(--paper);box-shadow:0 20px 70px #182b4340}.confirm-dialog::backdrop{background:#10213999}.confirm-dialog h2{font-size:1.2rem;margin:0 0 16px}.confirm-file-name{padding:12px 14px;background:var(--soft);font-size:.9rem;overflow-wrap:anywhere}.confirm-dialog .actions{justify-content:flex-end;margin-top:24px}.confirm-dialog button.danger{background:var(--red);border-color:var(--red);color:white}.confirm-dialog button.danger:hover{background:#822929}
 .folder-panel{border-bottom:1px solid var(--line);padding-bottom:18px;margin:22px 0}.folder-browser{display:grid;grid-template-columns:minmax(220px,1fr) minmax(200px,1fr);gap:22px}.folder-tree{border:1px solid var(--line);max-height:300px;overflow:auto;padding:8px}.folder-row{display:flex;align-items:center;gap:3px;min-width:max-content}.folder-row button{background:transparent;border-color:transparent;padding:6px 8px;min-height:35px;font-size:.8rem;text-align:left}.folder-row button[aria-current=true]{background:var(--soft);border-color:#a5bbd5;font-weight:750}.folder-row .folder-toggle{width:30px;text-align:center;padding:5px}.folder-label{display:flex;gap:10px;align-items:baseline}.folder-count{font-size:.73rem;color:var(--muted);font-weight:400}.folder-breadcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:5px;overflow-wrap:anywhere}.folder-breadcrumbs button{font-size:.8rem;padding:6px 8px;min-height:36px;overflow-wrap:anywhere;max-width:100%}.folder-breadcrumbs button[aria-current=page]{border-color:var(--blue);background:var(--soft)}.folder-location{min-width:0}.test-camera-field select{min-width:160px}@media(max-width:800px){.folder-browser{grid-template-columns:1fr}.folder-tree{max-height:230px}.folder-panel .section-title{align-items:flex-start;flex-direction:column}}
+
+.port-device-row{padding:4px 0;overflow-wrap:anywhere}.port-device-row small{display:block;color:var(--muted)}.network-state{white-space:pre-wrap}.port-handoff{border-left:4px solid var(--blue);padding:15px 18px;margin-bottom:20px;background:var(--soft)}.device-result{margin-top:16px}.device-result h3{font-size:1rem}.port-target{outline:3px solid #5c8cc3;outline-offset:2px}
+.port-list-details summary{cursor:pointer;color:var(--blue);font-weight:600}
+.port-list-details[open] summary{margin-bottom:.4rem}.port-list-details .port-devices{max-height:18rem;overflow:auto}
+.port-list-details .port-mac-only{display:block;color:var(--muted);font-variant-numeric:tabular-nums}
+.port-ip-preview{display:block;color:var(--muted);margin-top:.2rem;overflow-wrap:anywhere}
+/* Switch overview */
+#tab-switch{--hub-edge:#cbd5df;--hub-surface:#f2f5f8;--hub-active:#224e87}
+#tab-switch .panel{border-radius:9px;margin-bottom:14px}
+#tab-switch .hub-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+#tab-switch h2{line-height:1.4}#tab-switch .hub-section-head h2{margin:0}
+#tab-switch .hub-text-action{color:var(--hub-active);border:0;background:transparent;padding:6px 2px;min-height:36px;font-size:.85rem}
+#tab-switch .hub-text-action:hover{text-decoration:underline}
+#tab-switch .hub-connect-fields{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;align-items:end;gap:14px}
+#tab-switch .hub-connect-fields .label{font-size:.8rem;margin:0 0 5px}
+#tab-switch .hub-connect-fields select,#tab-switch .hub-connect-fields input,#switch-inspect{height:44px;min-height:44px}
+#tab-switch .hub-inline-status{margin:10px 0 0;font-size:.81rem;color:var(--muted);overflow-wrap:anywhere}
+#tab-switch .hub-time{font-size:.8rem;color:var(--muted);white-space:nowrap}
+#tab-switch .hub-front{margin:0;padding:12px 14px 14px;border:1px solid var(--hub-edge);background:var(--hub-surface);color:var(--ink);border-radius:7px}
+#tab-switch .hub-front-head{margin-bottom:9px;color:#53657a;font-size:.8rem}
+#tab-switch .hub-port-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+#tab-switch .hub-port-card{min-width:0;border:1px solid #c7d2de;border-radius:6px;background:#fff;display:flex;flex-direction:column;align-items:stretch}
+#tab-switch .hub-port-card:has([aria-pressed=true]){border-color:var(--hub-active);box-shadow:0 0 0 1px var(--hub-active)}
+#tab-switch .hub-port{min-width:0;display:flex;flex-direction:column;align-items:stretch;text-align:left;border:0;background:transparent;border-radius:5px;color:var(--ink);padding:9px 10px;min-height:0;gap:5px;flex:1;width:100%;line-height:1.3}
+#tab-switch .hub-port:hover{background:#e7eef8}#tab-switch .hub-port[aria-pressed=true]{background:#e7effa}
+#tab-switch .hub-port .port-number{display:flex;align-items:center;justify-content:space-between;font-size:.85rem;letter-spacing:.025em}
+#tab-switch .hub-port .socket{position:relative;width:18px;height:14px;background:#eef2f6;border:1.5px solid #8292a4;border-radius:2px;margin:0;flex-shrink:0}
+#tab-switch .hub-port .socket:after{content:'';position:absolute;left:3px;right:3px;bottom:1px;height:4px;background:repeating-linear-gradient(90deg,#70839a 0 1px,transparent 1px 3px)}
+#tab-switch .hub-port.fiber .socket{width:21px;height:11px}#tab-switch .hub-port.fiber .socket:after{display:none}
+#tab-switch .hub-port .port-device{font-size:.81rem;font-variant-numeric:tabular-nums;font-weight:650;line-height:1.2;color:#344c65;overflow-wrap:anywhere}
+#tab-switch .port-device:empty{display:none}
+#tab-switch .hub-port .port-status{margin-top:auto;display:flex;gap:5px;align-items:center;font-size:.72rem;font-weight:500;color:#53657a}
+#tab-switch .hub-port .led{border-radius:50%;width:7px;height:7px;flex-shrink:0;background:#aebac6;box-shadow:none}
+#tab-switch .hub-port.up .led{background:#17805f}#tab-switch .hub-port.off .led{background:#aa6416}
+#tab-switch .hub-watch{border:0;border-top:1px solid #d2deea;border-radius:0 0 5px 5px;background:#eef4fc;color:#204e86;display:flex;justify-content:center;align-items:center;gap:6px;padding:6px 5px;min-height:32px;font-size:.76rem}
+#tab-switch .hub-watch:before{content:'';width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid currentColor}
+#tab-switch .hub-watch:hover{background:#dbe9fa}
+#tab-switch .hub-guidance{margin:10px 0 0;color:var(--amber);font-size:.84rem}#tab-switch .hub-guidance:empty{display:none}
+#tab-switch .hub-fold{padding:0}#tab-switch .hub-fold>summary{padding:14px 22px;line-height:1.5;font-size:.94rem;color:#344c65}
+#tab-switch .hub-fold>summary:focus-visible{outline:3px solid #c28c41;outline-offset:2px}
+#tab-switch .hub-fold[open]>summary{border-bottom:1px solid var(--line)}
+#tab-switch .hub-fold-body{padding:14px 22px 18px}
+#tab-switch .hub-fold-body>.form-row:first-child,#tab-switch .hub-fold-body>.rule-explain:first-child{margin-top:0}
+#tab-switch .hub-fold-body>.actions{margin-top:15px}#tab-switch .switch-connect,#tab-switch .switch-map-panel{padding:18px 22px}
+#tab-switch .hub-fold-body .network-state{margin:0 0 16px}
+#tab-switch .file-actions select{width:auto;min-height:34px;padding:4px}
+@media(max-width:960px){#tab-switch .hub-port-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:720px){#tab-switch .switch-connect,#tab-switch .switch-map-panel{padding:14px}#tab-switch .hub-connect-fields{grid-template-columns:minmax(0,1fr) auto;gap:9px}#tab-switch .hub-connect-fields>.field:first-child{grid-column:1/-1}#tab-switch .hub-connect-fields .primary{padding-inline:10px}#tab-switch .hub-port-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#tab-switch .hub-front{padding:9px}#tab-switch .hub-fold-body{padding:12px}#tab-switch .hub-port{padding:7px}.hub-time{white-space:normal}}
+@media(max-width:460px){#tab-switch .hub-port-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Selected switch port */
+#port-camera-panel{scroll-margin-top:14px}
+#pc-controls{padding:0;border:0;margin:0;min-width:0}
+.pc-heading,.pc-video-heading,.pc-target-fields{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pc-heading{justify-content:space-between;margin-bottom:14px}
+.pc-heading h2{margin:0}.pc-heading p{margin:2px 0 0;color:var(--muted);font-size:.86rem;overflow-wrap:anywhere}
+.pc-video-heading{margin-bottom:8px}.pc-video-heading h3{margin:0 auto 0 0;font-size:1rem}
+.pc-video-heading label{display:flex;gap:7px;align-items:center;color:var(--muted);font-size:.8rem}
+.pc-video-heading select{width:auto;min-height:34px;font-size:.84rem;padding:4px 7px}
+.pc-screen{background:#152b3f;border-radius:8px;overflow:hidden;color:#edf5fb}
+#pc-standby{display:grid;justify-items:center;align-content:center;gap:8px;min-height:156px;padding:20px;text-align:center}
+#pc-standby p{margin:0;color:#d1dfe9;font-size:.85rem}
+#pc-standby .pc-play{background:#f5fafc;color:#15334a;border:0;border-radius:6px;min-width:142px}
+#pc-standby .pc-play span{font-size:.8em;margin-right:4px}
+#pc-standby .pc-play:disabled{opacity:.65}
+#pc-standby .pc-setup-link{padding:2px 8px;min-height:30px;color:#daeaf7;background:none;border:0;text-decoration:underline;text-underline-offset:4px}
+#pc-player #live-display{display:flex;flex-direction:column}
+#pc-player #live-video-panel{order:-1;margin:0;border:0}
+#pc-player #live-video{display:block;width:100%;object-fit:contain;max-height:55vh;margin:0}
+#pc-player #live-metrics{order:0;color:#e6f0f7;border:none;margin:0;padding:6px 14px;gap:16px;font-size:.82rem}
+#pc-player #live-metrics span{color:#bbcbd9}#pc-player #live-metrics b{font-size:.9rem}
+#pc-player #live-note{order:1;margin:0;padding:6px 14px;color:#d5e3ed;font-size:.8rem}
+#pc-player #live-note:empty,#pc-player #live-metrics-note{display:none}
+#pc-install{margin-top:18px;border-top:1px solid var(--line)}
+#pc-install>summary{padding:13px 0 3px;font-size:.96rem}
+.pc-install-body{max-width:800px;padding:4px 0 0}
+.pc-target-fields{align-items:end;margin-top:12px}.pc-target-fields .field{flex:0 1 260px}
+.pc-isolation{margin-top:13px;background:#f2f5f8;border:1px solid var(--line);border-radius:5px;padding:9px 14px}
+.pc-isolation summary{font-size:.86rem}.pc-isolation summary span{font-weight:400;color:var(--muted)}
+#pc-selected-state,#pc-peers>div{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:440px}
+#pc-peers>div{border-top:1px solid var(--line);padding:5px 0}
+#pc-selected-state{font-size:.87rem;margin:3px 0 8px}
+#pc-peers .switch{margin:0}
+#pc-isolation .small{min-height:31px;padding:4px 9px}
+#pc-account,#pc-network,#pc-activation{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.pc-install-body h3{font-size:1rem;margin:0}
+.pc-install-body .form-row{margin:9px 0 12px}
+#port-camera-panel p:empty{display:none}
+@media(max-width:650px){#pc-standby{min-height:128px}.pc-video-heading label{flex-wrap:wrap}.pc-install-body .form-row.three{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
 <div class="shell">
  <aside class="sidebar"><div class="wordmark">ED / FIELD RECORDER</div><div class="brand">카메라<br>녹화 관리</div>
-  <nav role="tablist" aria-label="녹화 관리 메뉴"><button type="button" role="tab" aria-selected="true" data-tab="record">녹화 현황</button><button type="button" role="tab" aria-selected="false" data-tab="schedule">시간표 · 날씨</button><button type="button" role="tab" aria-selected="false" data-tab="device">장비 설정</button><button type="button" role="tab" aria-selected="false" data-tab="live">실시간 · 프로필</button><button type="button" role="tab" aria-selected="false" data-tab="ping">연결 기록</button><button type="button" role="tab" aria-selected="false" data-tab="files">녹화 파일</button><button type="button" role="tab" aria-selected="false" data-tab="snapshots">이미지 캡처</button><button type="button" role="tab" aria-selected="false" data-tab="camera-admin">카메라 IP · 계정</button><button type="button" role="tab" aria-selected="false" data-tab="switch">허브 관리</button></nav>
+  <nav role="tablist" aria-label="녹화 관리 메뉴"><button type="button" role="tab" aria-selected="true" data-tab="record">녹화 현황</button><button type="button" role="tab" aria-selected="false" data-tab="live">실시간 영상</button><button type="button" role="tab" aria-selected="false" data-tab="files">녹화 파일</button><button type="button" role="tab" aria-selected="false" data-tab="snapshots">이미지 캡처</button><button type="button" role="tab" aria-selected="false" data-tab="schedule">시간표 · 날씨</button><button type="button" role="tab" aria-selected="false" data-tab="device">장비 설정</button><button type="button" role="tab" aria-selected="false" data-tab="ping">연결 기록</button><button type="button" role="tab" aria-selected="false" data-tab="camera-admin">카메라 IP · 계정</button><button type="button" role="tab" aria-selected="false" data-tab="switch">허브 관리</button></nav>
   <div class="side-foot">ED 장비에서 직접 저장<br>모든 시각은 한국 시간 기준</div>
  </aside>
  <main class="workspace">
@@ -71,17 +182,24 @@
     <details class="advanced"><summary>보관 및 여유 공간</summary><div class="form-row"><label class="field"><span class="label">자동 삭제 기준 (일)</span><input id="retention" type="number" min="0" max="36500" value="0"><span class="hint">0은 자동 삭제 안 함. 양수는 지난 관리 대상 영상을 삭제합니다.</span></label><label class="field"><span class="label">최소 여유 공간 (GiB)</span><input id="min-free" type="number" min="0" max="1000000" value="5"><span class="hint">이 값보다 부족하면 녹화를 일시 중단합니다.</span></label></div></details>
    </div><p class="path">사용 중인 설정 파일 <span id="config-path">—</span></p>
   </section>
-  <section id="tab-live" class="tab-pane" role="tabpanel" aria-label="실시간 카메라 재생과 프로필 설정" hidden>
-   <div class="panel">
-    <div class="section-title"><h2>저장된 카메라 실시간 보기</h2><button id="live-refresh" type="button" class="small">목록 새로고침</button></div>
-    <p class="caption">저장된 IP와 계정으로 한 대씩 재생합니다. 시험 녹화를 시작하지 않아도 볼 수 있습니다.</p>
-    <div class="form-row"><label class="field"><span class="label">카메라</span><select id="live-camera"><option value="">카메라를 불러오세요</option></select></label><label class="field"><span class="label">재생할 프로필</span><select id="live-profile"><option value="current">저장된 녹화 프로필</option><option value="2">2번 · HD 구성용</option><option value="4">4번 · 4K 구성용</option></select></label></div>
-    <div class="actions advanced"><button id="live-start" type="button" class="primary">실시간 재생</button><button id="live-stop" type="button" disabled>재생 중지</button><button id="live-capture" type="button">현재 카메라 이미지 캡처</button></div>
-    <p id="live-note" class="caption" role="status">프로필 번호만으로 해상도가 정해지지는 않습니다. 아래에서 실제 설정을 조회할 수 있습니다.</p>
-    <div id="live-metrics" class="facts" hidden><div class="fact"><span>실제 해상도</span><b id="live-resolution">—</b></div><div class="fact"><span>재생 FPS</span><b id="live-fps">—</b></div><div class="fact"><span>재생 중 누락 프레임</span><b id="live-dropped">—</b></div></div><p id="live-metrics-note" class="caption" hidden>FPS는 브라우저에서 실제 재생한 프레임 수를 초당 측정한 값입니다. 카메라 설정 FPS와 다를 수 있고, 비활성 창에서는 낮아질 수 있습니다. 누락 프레임도 브라우저 재생 기준이며 녹화 손실을 뜻하지 않습니다.</p><div id="live-video-panel" class="video-panel" hidden><video id="live-video" controls autoplay muted playsinline></video></div>
-    <p class="caption">H.264 영상 전용이며 소리는 재생하지 않습니다. 재생에는 몇 초 지연이 있을 수 있고, 페이지를 떠나면 연결이 종료됩니다. 녹화 파일은 만들지 않습니다.</p>
+  <section id="tab-live" class="tab-pane" role="tabpanel" aria-label="실시간 카메라 영상" hidden>
+   <div class="panel monitor-panel">
+    <div class="section-title"><h2>실시간 영상</h2><button id="live-refresh" type="button" class="small ghost">목록 새로고침</button></div>
+    <div class="monitor-controls">
+     <label class="field"><span class="label">카메라</span><select id="live-camera"><option value="">카메라를 불러오세요</option></select></label>
+     <label class="field"><span class="label">재생할 프로필</span><select id="live-profile"><option value="current">저장된 녹화 프로필</option><option value="2">2번 · HD 구성용</option><option value="4">4번 · 4K 구성용</option></select></label>
+     <button id="live-start" type="button" class="primary">영상 보기</button><button id="live-stop" type="button" disabled>재생 중지</button>
+    </div>
+    <div id="live-display-home">
+     <div class="monitor-idle" aria-hidden="true"><span>영상을 볼 카메라를 선택하세요</span></div>
+     <div id="live-display"><div id="live-video-panel" class="video-panel" hidden><video id="live-video" controls autoplay muted playsinline></video></div>
+      <p id="live-note" class="caption" role="status"></p>
+      <div id="live-metrics" class="facts" hidden><div class="fact"><span>해상도</span><b id="live-resolution">—</b></div><div class="fact"><span>재생 FPS</span><b id="live-fps">—</b></div><div class="fact"><span>누락 프레임</span><b id="live-dropped">—</b></div></div><p id="live-metrics-note" class="caption" hidden>FPS와 누락 프레임은 브라우저 재생 기준입니다.</p>
+     </div>
+    </div>
+    <button id="live-capture" type="button" class="small">현재 카메라 이미지 캡처</button>
    </div>
-   <div class="panel">
+   <details class="panel monitor-profiles"><summary>카메라·녹화 프로필 설정</summary><div>
     <h2>카메라 프로필 설정</h2><p class="caption">위에서 선택한 카메라를 설정합니다. 지원되는 Wisenet 카메라에서 2번 HD · 4번 4K · 기본 4번으로 구성합니다.</p>
     <div class="actions"><button id="profile-read" type="button">현재 프로필 조회</button><button id="profile-plan" type="button">HD / 4K 변경 내용 확인</button></div>
     <div id="profile-result" class="advanced" aria-live="polite"></div>
@@ -89,7 +207,7 @@
     <hr class="advanced"><h2>이 프로그램의 녹화 프로필</h2><p class="caption">카메라 프로필을 만든 뒤 녹화 주소도 선택하세요. 다른 카메라와 예약 시간은 유지합니다. 변경 후 녹화 현황에서 예약 녹화를 다시 시작하세요.</p>
     <div class="form-row"><label class="field"><span class="label">선택한 카메라의 녹화 프로필</span><select id="profile-recording"><option value="4">4번 · 4K 구성용</option><option value="2">2번 · HD 구성용</option></select></label><div class="actions"><button id="profile-use" type="button">녹화 주소에 적용</button></div></div>
     <p class="caption">전체 카메라를 한 번에 바꾸려면 장비 설정의 공통 녹화 프로필을 선택하고 설정을 저장하세요.</p>
-   </div>
+   </div></details>
   </section>
   <section id="tab-ping" class="tab-pane" role="tabpanel" aria-label="카메라 시간대별 핑 기록" hidden>
    <div class="panel"><h2>카메라 연결 기록</h2><p class="caption">프로그램 실행 중 저장된 카메라를 1분마다 검사하고 최근 24시간을 보관합니다. 프로그램이 꺼진 시간에는 검사하지 않습니다. 핑 응답 여부만 나타내며 RTSP 영상이나 인증 상태를 뜻하지 않습니다.</p>
@@ -125,40 +243,131 @@
    <div class="panel"><h2>최근 캡처</h2><p class="caption">이 ED의 프로그램 폴더 아래 snapshots/카메라/날짜에 저장됩니다. 최근 100개를 표시합니다.</p><div class="library-table-wrap"><table class="file-table"><thead><tr><th>시각 (KST)</th><th>카메라 / IP</th><th>해상도</th><th>작업</th></tr></thead><tbody id="snap-list"></tbody></table></div></div>
   </section>
   <section id="tab-camera-admin" class="tab-pane" role="tabpanel" aria-label="카메라 IP와 계정 설정" hidden>
-   <div class="notice">같은 초기 IP를 쓰는 카메라는 허브에서 한 대만 통신하도록 분리한 뒤 설정하세요. MAC 주소와 실제 연결 포트를 확인하고, 한 대의 IP 변경이 끝난 뒤 다음 카메라 포트를 켜세요.</div>
-   <div class="panel"><h2>등록된 카메라 설정</h2><p class="caption">저장된 계정으로 현재 설정을 조회합니다. 적용할 때는 예약 녹화·시험 녹화와 실시간 재생을 중지하세요.</p>
-    <div class="inline"><select id="ca-camera" aria-label="설정할 카메라"><option value="">카메라를 불러오세요</option></select><button id="ca-inspect" type="button">현재 설정 조회</button><button id="ca-refresh" class="small" type="button">목록 새로고침</button></div>
+
+   <div id="camera-port-context" class="port-handoff" hidden></div>
+   <div class="panel"><h2>카메라 IP · 아이디 변경</h2>
+    <label class="field"><span class="label">접속 방법</span>
+     <select id="ca-method"><option value="direct">카메라 IP 직접 입력</option><option value="saved">녹화기에 저장된 계정 사용</option></select></label>
+    <div id="ca-direct-fields">
+     <div class="form-row three">
+      <label class="field"><span class="label">현재 카메라 IP</span><input id="ca-address" value="" spellcheck="false"></label>
+      <label class="field"><span class="label">현재 카메라 아이디</span><input id="ca-login" value="" spellcheck="false" autocomplete="off"></label>
+      <label class="field"><span class="label">현재 카메라 비밀번호</span><input id="ca-secret" type="password" autocomplete="off"></label>
+     </div><div class="actions advanced"><button type="button" class="primary" id="ca-connect">카메라 조회</button></div>
+    </div>
+    <div id="ca-saved-fields" class="inline" hidden><select id="ca-camera" aria-label="설정할 카메라"><option value="">카메라를 불러오세요</option></select><button id="ca-inspect" type="button">현재 설정 조회</button><button id="ca-refresh" class="small" type="button">목록 새로고침</button></div>
     <p id="ca-note" class="caption" role="status">카메라를 선택하고 현재 설정을 조회하세요.</p>
-    <div id="ca-settings" hidden><div id="ca-identity" class="rule-explain"></div>
-     <h2>IP 주소 변경</h2><div class="form-row three"><label class="field"><span class="label">새 IP</span><input id="ca-ip" spellcheck="false"></label><label class="field"><span class="label">서브넷 마스크</span><input id="ca-mask" spellcheck="false"></label><label class="field"><span class="label">게이트웨이</span><input id="ca-gateway" spellcheck="false"></label></div>
-     <p class="caption">변경 후 이 ED에서 새 주소로 접근할 수 있어야 합니다. 확인이 끝나면 이 녹화기의 해당 카메라 주소도 갱신합니다.</p><button id="ca-network-plan" type="button">IP 변경 내용 확인</button>
-     <h2 class="advanced">계정·비밀번호 변경</h2><div class="form-row"><label class="field"><span class="label">아이디</span><input id="ca-user" autocomplete="off" spellcheck="false" maxlength="8"><span id="ca-user-hint" class="hint"></span></label><label class="field"><span class="label">새 비밀번호</span><input id="ca-password" type="password" autocomplete="new-password"></label></div><div class="form-row"><label class="field"><span class="label">새 비밀번호 확인</span><input id="ca-password-repeat" type="password" autocomplete="new-password"></label></div><p class="caption">이 녹화기의 저장 계정도 갱신합니다. 센터·NVR·다른 ED의 저장 계정은 각 장비에서 함께 변경해야 합니다.</p><button id="ca-password-plan" type="button">계정 변경 내용 확인</button>
+    <div class="rule-explain" id="opt-port-block" hidden>
+ <strong>연결된 허브 포트</strong><p id="opt-port-status" role="status">미확인</p>
+ <details id="opt-port-more"><summary>허브에서 포트 확인</summary>
+  <div id="opt-port-inputs" hidden>
+   <label class="field"><span class="label">조회할 허브</span><select id="opt-port-switch"></select></label>
+   <p id="opt-port-route" class="caption"></p>
+   <div id="opt-port-login" hidden><label class="field"><span class="label">허브 비밀번호</span><input type="password" autocomplete="off" id="opt-port-password"></label><button id="opt-port-check" type="button">이 카메라의 포트 조회</button></div>
+  </div><p id="opt-port-extra" class="caption"></p>
+ </details>
+</div>
+
+    <div id="ca-settings"><div id="ca-identity" class="rule-explain" hidden></div>
+     <label id="ca-one-field" class="switch" hidden><input type="checkbox" id="ca-one" disabled>이 IP와 MAC의 카메라 한 대를 확인했습니다. 같은 IP를 쓰는 장치가 여러 대면 한 대씩 연결하세요.</label>
+     <h2>IP 주소 변경</h2><div class="form-row three"><label class="field"><span class="label">새 IP</span><input id="ca-ip" spellcheck="false" disabled></label><label class="field"><span class="label">서브넷 마스크</span><input id="ca-mask" spellcheck="false" disabled></label><label class="field"><span class="label">게이트웨이</span><input id="ca-gateway" spellcheck="false" disabled></label></div>
+     <p class="caption">현재 아이디와 비밀번호를 유지합니다. 기본 설정은 변경 후 새 주소에 접속해 같은 카메라인지 확인합니다.</p>
+     <div id="ca-handover-field"><label class="switch"><input type="checkbox" id="ca-defer" disabled>새 IP에 재접속하지 않고 주소만 변경</label>
+      <p class="caption">다른 대역으로 옮길 때 사용하세요. 새 대역에서 할당한 빈 IP를 입력하세요. 새 주소의 응답과 녹화 연결은 해당 대역에서 확인해야 합니다.</p></div>
+     <p id="ca-network-access" class="caption">현재 카메라 비밀번호를 입력하고 ‘카메라 조회’를 누르면 새 IP를 입력할 수 있습니다.</p>
+     <button id="ca-network-plan" class="primary" type="button" aria-describedby="ca-network-access" disabled>IP 변경 내용 확인</button><p id="ca-network-note" class="caption" role="status"></p>
+     <details id="ca-account-extra" class="advanced" hidden><summary>카메라 계정 변경</summary><div class="form-row"><label class="field"><span class="label">새 아이디</span><input id="ca-user" autocomplete="off" spellcheck="false" aria-describedby="ca-user-hint"><span id="ca-user-hint" class="hint"></span></label><div class="actions"><button id="ca-username-plan" type="button">아이디 변경 내용 확인</button></div></div><p id="ca-username-note" class="caption" role="status"></p>
+     <details id="ca-password-extra" class="advanced"><summary>비밀번호도 변경</summary><div class="form-row"><label class="field"><span class="label">새 비밀번호</span><input id="ca-password" type="password" autocomplete="new-password"></label></div><div class="form-row"><label class="field"><span class="label">새 비밀번호 확인</span><input id="ca-password-repeat" type="password" autocomplete="new-password"></label></div><p class="caption">이 녹화기의 저장 계정도 갱신합니다. 센터·NVR·다른 ED의 저장 계정은 각 장비에서 함께 변경해야 합니다.</p><button id="ca-password-plan" type="button">계정 변경 내용 확인</button></details></details>
     </div>
    </div>
    <div id="ca-plan-panel" class="panel" hidden><h2>카메라에 적용할 내용</h2><div id="ca-plan-text" class="rule-explain" style="white-space:pre-wrap"></div><p id="ca-plan-warnings" class="caption"></p><label class="switch"><input id="ca-confirm" type="checkbox">대상 카메라와 변경 내용을 확인했습니다.</label><div class="actions"><button id="ca-apply" class="primary" type="button" disabled>백업 후 카메라에 적용</button><button id="ca-cancel" type="button">취소</button></div></div>
-   <div class="panel"><h2>새 카메라 · 최초 비밀번호 등록</h2><p class="caption">지원되는 Wisenet/SUNAPI 카메라를 한 대씩 등록합니다. 현재 IP가 ED의 카메라용 랜포트에서 접근 가능해야 합니다.</p>
-    <div class="form-row"><label class="field"><span class="label">현재 카메라 IP</span><input id="ci-ip" placeholder="카메라에 현재 설정된 IP" spellcheck="false"></label><label class="field"><span class="label">ED 접속 IP · 선택</span><input id="ci-source" placeholder="비우면 enp2 경로에서 확인" spellcheck="false"></label></div><div class="actions advanced"><button id="ci-inspect" type="button">초기 등록 상태 조회</button></div>
+   <details id="camera-new-panel" class="panel"><summary>처음 비밀번호를 설정하거나 녹화기에 추가</summary><p class="caption">지원되는 Wisenet/SUNAPI 카메라를 한 대씩 등록합니다. 현재 IP가 ED의 카메라용 랜포트에서 접근 가능해야 합니다.</p>
+    <div class="form-row"><label class="field"><span class="label">현재 카메라 IP</span><input id="ci-ip" value="" placeholder="카메라에 현재 설정된 IP" spellcheck="false"></label><label class="field"><span class="label">ED 접속 IP · 선택</span><input id="ci-source" placeholder="비우면 enp2 경로에서 확인" spellcheck="false"></label></div><div class="actions advanced"><button id="ci-inspect" type="button">초기 등록 상태 조회</button><button id="ci-find-port" type="button">허브에서 연결 포트 찾기</button></div>
     <p id="ci-note" class="caption" role="status">조회만으로 카메라 설정이 바뀌지는 않습니다.</p><div id="ci-details" hidden><div id="ci-identity" class="rule-explain" style="white-space:pre-wrap"></div><label class="switch"><input id="ci-isolated" type="checkbox">이 IP를 사용하는 카메라 한 대만 연결되도록 분리했고 MAC 주소를 확인했습니다.</label>
      <div class="form-row"><label class="field"><span class="label">카메라 아이디</span><input id="ci-user" value="" placeholder="실제 카메라 관리 계정" autocomplete="off" spellcheck="false"><span class="hint">초기 상태가 확인된 카메라의 최초 비밀번호 등록에만 제조사 지정 admin 계정을 사용합니다.</span></label><label class="field"><span id="ci-password-label" class="label">설정할 비밀번호</span><input id="ci-password" type="password" autocomplete="new-password"></label></div><div id="ci-repeat-field" class="form-row"><label class="field"><span class="label">비밀번호 확인</span><input id="ci-password-repeat" type="password" autocomplete="new-password"></label></div>
      <p id="ci-policy" class="caption"></p><div class="actions"><button id="ci-plan" type="button">최초 등록 내용 확인</button></div>
      <div id="ci-plan-panel" class="rule-explain" hidden><p id="ci-plan-text"></p><label class="switch"><input id="ci-confirm" type="checkbox">이 카메라의 최초 관리자 비밀번호를 설정합니다.</label><button id="ci-apply" type="button" class="primary" disabled>최초 비밀번호 적용</button></div>
-     <div id="ci-register-panel" hidden><h2 class="advanced">이 녹화기에 한 대 추가</h2><p class="caption">IP·아이디·비밀번호를 검증한 뒤 접속 정보만 추가합니다. 기존 카메라는 유지하며 녹화를 자동 시작하지 않습니다. 추가 후 위에서 IP를 변경할 수 있습니다.</p><label class="field"><span class="label">녹화에 사용할 프로필</span><select id="ci-profile"><option value="4">4번 · 4K 구성용</option><option value="2">2번 · HD 구성용</option></select><span class="hint">프로필 번호만으로 해상도가 정해지지는 않습니다. 등록 후 실시간 · 프로필에서 실제 설정을 확인하세요.</span></label><div class="actions advanced"><button id="ci-register" type="button">이 카메라 접속 정보 등록</button></div></div>
+     <div id="ci-register-panel" hidden><h2 class="advanced">계정 확인 후 IP 설정으로 이동</h2><p class="caption">IP·아이디·비밀번호를 검증한 뒤 접속 정보만 추가합니다. 기존 카메라는 유지하며 녹화를 자동 시작하지 않습니다. 등록하면 위의 IP 변경 화면으로 이어집니다. 새 주소와 ED의 통신 경로를 확인한 후 적용하세요.</p><label class="field"><span class="label">녹화에 사용할 프로필</span><select id="ci-profile"><option value="4">4번 · 4K 구성용</option><option value="2">2번 · HD 구성용</option></select><span class="hint">프로필 번호만으로 해상도가 정해지지는 않습니다. 등록 후 실시간 · 프로필에서 실제 설정을 확인하세요.</span></label><div class="actions advanced"><button id="ci-account-check" type="button">현재 계정으로 장비 확인</button><button id="ci-register" type="button">접속 정보 등록 후 IP 설정</button></div></div>
     </div>
-   </div>
+   </details>
   </section>
   <section id="tab-switch" class="tab-pane" role="tabpanel" aria-label="허브 설정과 포트 관리" hidden>
-   <div class="panel">
-    <h2>허브 관리 연결</h2><p class="caption">설정 변경 지원: NEXTU NTK-9528 / POE9728MDTL2, 펌웨어 V200SP10241024. 카메라용 enp2 경로로만 접속합니다. 다른 모델·펌웨어의 설정 명령은 실행하지 않습니다.</p>
-    <div class="form-row"><label class="field"><span class="label">등록된 허브</span><select id="switch-select"><option value="">새 허브 등록</option></select></label><label class="field"><span class="label">현장 이름</span><input id="switch-name" placeholder="직접 지정할 현장 이름" maxlength="80"></label></div>
-    <div class="form-row"><label class="field"><span class="label">허브 관리 IP</span><input id="switch-target" placeholder="허브의 실제 관리 IPv4 주소" spellcheck="false"></label><label class="field"><span class="label">ED의 관리 접속 IP</span><input id="switch-source" placeholder="ED에 이미 설정된 관리망 주소" spellcheck="false"></label></div>
-    <div class="form-row"><label class="field"><span class="label">ED 접속 인터페이스</span><input id="switch-interface" placeholder="예: enp2s0f1 또는 관리용 VLAN 인터페이스" spellcheck="false"><span class="hint">관리 VLAN 접속 경로가 먼저 준비되어 있어야 합니다. LTE·Netplan은 여기서 변경하지 않습니다.</span></label><label class="field"><span class="label">제어할 카메라 포트</span><input id="switch-camera-ports" placeholder="예: 1,2,3,4" spellcheck="false"><span class="hint">실제 배선된 포트만 입력하세요. ED·광·업링크 포트는 자동 보호합니다.</span></label></div>
-    <div class="form-row"><label class="field"><span class="label">허브 관리 아이디</span><input id="switch-user" autocomplete="off" placeholder="허브 관리 계정" spellcheck="false"></label><label class="field"><span class="label">허브 관리 비밀번호</span><input id="switch-password" type="password" autocomplete="off"><span class="hint">카메라·PC 비밀번호와 별개입니다. 파일에 저장하지 않습니다.</span></label></div>
-    <div class="form-row"><label class="field"><span class="label">등록된 허브 MAC</span><input id="switch-mac" readonly placeholder="상태 조회 후 장비를 확인하여 등록"><span class="hint">MAC으로 대상 장비가 바뀌지 않았는지 확인합니다.</span></label><div class="actions"><button id="switch-save" type="button">접속 정보 저장</button><button id="switch-inspect" type="button" class="primary">허브 상태 조회</button></div></div>
-    <p id="switch-note" class="caption" role="status">처음에는 접속 정보를 저장하고 상태를 조회하세요.</p>
-    <div id="switch-identity" class="rule-explain" hidden><p id="switch-identity-text"></p><button id="switch-pin" type="button">이 장비를 관리 대상으로 지정</button></div>
+   <div class="panel switch-connect">
+    <div class="hub-section-head"><h2>허브 연결</h2><button id="switch-saved-live" type="button" class="hub-text-action">등록 카메라 영상 보기 <span aria-hidden="true">↗</span></button></div>
+    <div class="hub-connect-fields">
+     <label class="field"><span class="label">등록된 허브</span><select id="switch-select"><option value="">새 허브 등록</option></select></label>
+     <label class="field"><span class="label">허브 관리 비밀번호</span><input id="switch-password" type="password" autocomplete="off"></label>
+     <button id="switch-inspect" type="button" class="primary">허브 상태 조회</button>
+    </div>
+    <p id="switch-note" class="hub-inline-status" role="status">허브 비밀번호를 입력하고 포트를 조회하세요.</p>
    </div>
-   <div id="switch-state-panel" class="panel" hidden><h2>포트 상태와 VLAN</h2><p class="caption">‘끄기’는 데이터 통신 포트를 차단하는 기능입니다. PoE 전원 차단이나 카메라 재부팅을 뜻하지 않습니다. ‘10초 재연결’은 통신을 10초 차단한 뒤 다시 켭니다.</p><div class="library-table-wrap"><table class="file-table"><thead><tr><th>포트</th><th>링크</th><th>사용 상태</th><th>VLAN</th><th>학습 MAC / 카메라</th><th>변경</th></tr></thead><tbody id="switch-ports"></tbody></table></div><p id="switch-warnings" class="caption"></p><h2 class="advanced">카메라 IP와 학습 포트 대조</h2><p id="switch-mapping-note" class="caption"></p><div class="library-table-wrap"><table class="file-table"><thead><tr><th>카메라 / IP</th><th>MAC</th><th>학습 포트</th><th>확인 상태</th></tr></thead><tbody id="switch-camera-matches"></tbody></table></div></div>
-   <div id="switch-management-panel" class="panel" hidden><h2>허브 관리 주소 변경</h2><p class="caption">현재 관리 VLAN과 ED에서 접근 가능한 같은 대역 안에서 변경합니다. 광 링·관리 VLAN 자체의 이동은 적용하지 않습니다.</p><div class="form-row three"><label class="field"><span class="label">관리 IP</span><input id="switch-new-ip" spellcheck="false"></label><label class="field"><span class="label">서브넷 마스크</span><input id="switch-netmask" spellcheck="false"></label><label class="field"><span class="label">관리 게이트웨이</span><input id="switch-gateway" spellcheck="false"></label></div><div class="actions advanced"><button id="switch-management-plan" type="button">주소 변경 내용 확인</button></div><p class="caption">주소 변경 후에는 새 IP로 접속합니다. 적용 전 설정을 백업하고, 새 주소에서 장비와 저장 상태를 확인합니다.</p></div>
+   <div id="switch-diagram-panel" class="panel switch-map-panel" hidden>
+    <div class="hub-section-head"><h2>포트 연결 현황</h2><span id="switch-diagram-time" class="hub-time"></span></div>
+    <div class="hub-front"><div class="hub-front-head"><strong id="switch-diagram-title">허브</strong></div><div id="switch-port-map" class="hub-port-grid"></div></div>
+    <p id="switch-diagram-summary" class="hub-inline-status"></p><p id="switch-port-guidance" class="hub-guidance" role="status"></p>
+   </div>
+   <section id="port-camera-panel" class="panel" aria-labelledby="pc-title" hidden>
+    <fieldset id="pc-controls">
+     <header class="pc-heading"><div><h2 id="pc-title">선택한 카메라</h2><p id="pc-device"></p></div><button type="button" class="small" id="pc-close">닫기</button></header>
+     <div id="pc-view">
+      <div class="pc-video-heading"><h3>실시간 영상</h3><label id="pc-profile-label" hidden>재생 프로필 <select id="pc-profile"></select></label><button type="button" id="pc-stop" class="small" hidden>재생 중지</button></div>
+      <div class="pc-screen" id="pc-screen">
+       <div id="pc-standby"><button type="button" id="pc-play" class="pc-play" disabled><span aria-hidden="true">▶</span> 영상 보기</button><p id="pc-video-help"></p><button type="button" class="pc-setup-link" id="pc-open-setup" hidden>카메라 연결 확인으로 이동</button></div>
+       <div id="pc-player"></div>
+      </div>
+     </div>
+     <details id="pc-install">
+      <summary>카메라 설치 · IP 변경</summary>
+      <div class="pc-install-body">
+       <div class="pc-target-fields"><label class="field"><span class="label">현재 카메라 IP</span><input id="pc-current-ip" value="" spellcheck="false"></label><button type="button" class="small" id="pc-factory-address" hidden>초기 IP 사용</button></div>
+       <details class="pc-isolation" id="pc-isolation"><summary>같은 IP를 쓰는 포트 분리 <span id="pc-peer-count"></span></summary>
+        <p class="caption">여러 카메라가 192.168.1.100이면 같은 IP를 쓰는 다른 포트만 체크하고 통신을 꺼 주세요. ED의 enp2에는 이 주소로 가는 직접 경로가 필요합니다.</p>
+        <div id="pc-selected-state"></div><div id="pc-peers" aria-label="같은 IP를 사용하는 다른 포트"></div>
+       </details>
+       <label class="switch"><input id="pc-isolated" type="checkbox">다른 포트와 광 업링크를 포함해 이 IP로 응답하는 카메라는 한 대입니다.</label>
+       <button id="pc-identify" type="button" disabled>선택한 포트와 카메라 확인</button>
+       <p id="pc-identity" class="caption"></p>
+       <div id="pc-activation" hidden><h3>최초 관리자 비밀번호</h3>
+        <div class="form-row"><label class="field"><span class="label">새 admin 비밀번호</span><input id="pc-new-password" type="password" autocomplete="new-password"></label><label class="field"><span class="label">비밀번호 확인</span><input id="pc-repeat" type="password" autocomplete="new-password"></label></div>
+        <button type="button" id="pc-activation-plan">최초 설정 내용 확인</button>
+       </div>
+       <div id="pc-account" hidden><h3>카메라 계정</h3>
+        <div class="form-row"><label class="field"><span class="label">아이디</span><input id="pc-user" value="" autocomplete="off" spellcheck="false"></label><label class="field"><span class="label">현재 비밀번호</span><input id="pc-password" type="password" autocomplete="off"></label></div>
+        <button type="button" id="pc-account-check">계정 확인</button>
+       </div>
+       <div id="pc-network" hidden><h3>새 IP 설정</h3><p id="pc-view-hint" class="caption">먼저 위에서 실시간 영상을 확인하세요.</p>
+        <div class="form-row three"><label class="field"><span class="label">새 IP</span><input id="pc-new-ip" spellcheck="false"></label><label class="field"><span class="label">서브넷 마스크</span><input id="pc-mask" spellcheck="false"></label><label class="field"><span class="label">게이트웨이</span><input id="pc-gateway" spellcheck="false"></label></div>
+        <label class="switch"><input id="pc-defer" type="checkbox">새 IP 대역으로 옮긴 뒤 재접속 확인</label>
+        <button type="button" id="pc-ip-plan" disabled>IP 변경 내용 확인</button></div>
+       <div id="pc-plan" class="rule-explain" hidden><p id="pc-plan-text" style="white-space:pre-wrap"></p><label class="switch"><input id="pc-confirm" type="checkbox">대상 포트와 변경 내용을 확인했습니다.</label><div class="actions"><button type="button" class="primary" id="pc-apply" disabled>변경 적용</button><button type="button" id="pc-cancel">취소</button></div></div>
+       <p id="pc-note" class="caption" role="status" aria-live="polite"></p>
+      </div>
+     </details>
+     <p id="pc-readonly-note" class="caption" hidden></p>
+    </fieldset>
+   </section>
+   <details id="switch-connection-details" class="panel hub-fold"><summary>허브 접속 정보 · 관리 VLAN</summary><div class="hub-fold-body">
+    <p id="switch-network-state" class="rule-explain network-state" role="status">ED의 카메라용 랜포트를 확인하고 있습니다.</p>
+    <div class="form-row"><label class="field"><span class="label">현장 이름</span><input id="switch-name" placeholder="직접 지정할 현장 이름" maxlength="80"></label><label class="field"><span class="label">허브 관리 IP</span><input id="switch-target" placeholder="허브의 실제 관리 IPv4 주소" spellcheck="false"></label></div>
+    <div class="form-row"><label class="field"><span class="label">이 PC에서 확인된 카메라용 주소</span><select id="switch-local-interface"><option value="">현재 주소 조회 중</option></select></label><label class="field"><span class="label">ED의 관리 접속 IP</span><input id="switch-source" placeholder="ED에 배정된 관리 IP" spellcheck="false"></label></div>
+    <div class="form-row"><label class="field"><span class="label">ED 접속 인터페이스</span><input id="switch-interface" placeholder="예: enp2s0f1" spellcheck="false"></label><label class="field"><span class="label">제어할 카메라 포트</span><input id="switch-camera-ports" placeholder="예: 1,2,3,4" spellcheck="false"><span class="hint">직접 연결된 카메라의 LAN 포트 번호를 입력하세요.</span></label></div>
+    <div class="form-row"><label class="field"><span class="label">허브 관리 아이디</span><input id="switch-user" autocomplete="off" placeholder="허브 관리 계정" spellcheck="false"></label><label class="field"><span class="label">등록된 허브 MAC</span><input id="switch-mac" readonly placeholder="상태 조회 후 등록"></label></div>
+    <div class="actions"><button id="switch-save" type="button">접속 정보 저장</button></div>
+    <div id="switch-identity" class="rule-explain" hidden><p id="switch-identity-text"></p><button id="switch-pin" type="button">이 장비를 관리 대상으로 지정</button></div>
+    <details id="switch-management-network" class="advanced"><summary>관리 VLAN 자동 연결 설정</summary>
+     <p class="caption">ED 포트가 관리 VLAN을 태그로 받는 현장에서 한 번 설정하세요. 이 ED에 허브 전용 경로를 저장해 재부팅 후에도 자동으로 연결합니다. 태그 없이 직접 연결되는 현장에서는 위의 ‘허브 상태 조회’를 바로 사용할 수 있습니다.</p>
+     <div class="form-row"><label class="field"><span class="label">허브에 연결된 ED 랜포트</span><input id="switch-network-parent" list="switch-physical-ports" placeholder="예: enp2s0f1" spellcheck="false"><datalist id="switch-physical-ports"></datalist></label><label class="field"><span class="label">현장의 관리 VLAN 번호</span><input id="switch-network-vlan" type="number" min="1" max="4094" step="1" placeholder="1~4094"></label></div>
+     <div class="form-row"><label class="field"><span class="label">이 ED에 배정된 관리 IP</span><input id="switch-network-source" spellcheck="false" placeholder="현장에서 배정받은 IPv4"><span class="hint">같은 관리망의 ED마다 서로 다른 주소를 사용하세요.</span></label><div class="actions"><button id="switch-network-setup" type="button">이 ED에 자동 연결 설정</button></div></div>
+     <p id="switch-network-setup-note" class="caption" role="status"></p>
+     <details id="switch-network-terminal" hidden><summary>ED에 관리자 승인 창이 뜨지 않을 때</summary><p class="caption">녹화기 설치 폴더에서 아래 명령을 한 번 실행한 뒤 ‘이 ED에 자동 연결 설정’을 다시 누르세요.</p><code id="switch-network-command"></code></details>
+    </details>
+    <p class="caption">지원 장비　NEXTU NTK-9528 / POE9728MDTL2 · 펌웨어 V200SP10241024</p>
+   </div></details>
+   <details id="switch-find-details" class="panel hub-fold"><summary>IP로 연결 포트 찾기</summary><div class="hub-fold-body">
+    <div class="form-row"><label class="field"><span class="label">찾을 카메라 IP</span><input id="switch-candidate-ip" value="" spellcheck="false"></label><div class="actions"><button id="switch-discover" type="button">포트와 IP 함께 조회</button></div></div>
+    <p class="caption">같은 IP를 쓰는 카메라는 한 대씩 분리한 후 조회하세요.</p><div id="switch-candidate-result" class="device-result" role="status"></div></div></details>
+   <details id="switch-state-panel" class="panel hub-fold" hidden><summary>포트 상태 · VLAN · MAC 상세</summary><div class="hub-fold-body"><p class="caption">기본 VLAN(PVID)은 태그 없이 들어온 프레임에 적용됩니다. 광 포트는 여러 VLAN을 전달할 수 있습니다. ‘10초 재연결’은 포트의 데이터 통신을 10초간 껐다 켭니다.</p><div class="library-table-wrap"><table class="file-table"><thead><tr><th>포트</th><th>링크</th><th>사용 상태</th><th>기본 VLAN (PVID)</th><th>연결 장치 / IP · MAC</th><th>포트 제어</th></tr></thead><tbody id="switch-ports"></tbody></table></div><p id="switch-warnings" class="caption"></p><h2 class="advanced">카메라 IP와 학습 포트 대조</h2><p id="switch-mapping-note" class="caption"></p><div class="library-table-wrap"><table class="file-table"><thead><tr><th>카메라 / IP</th><th>MAC</th><th>학습 포트</th><th>확인 상태</th></tr></thead><tbody id="switch-camera-matches"></tbody></table></div></div></details>
+   <details id="switch-management-panel" class="panel hub-fold" hidden><summary>허브 관리 주소 변경</summary><div class="hub-fold-body"><p class="caption">현재 관리 VLAN과 ED에서 접근 가능한 같은 대역 안에서 변경합니다. 광 링·관리 VLAN 자체의 이동은 적용하지 않습니다.</p><div class="form-row three"><label class="field"><span class="label">관리 IP</span><input id="switch-new-ip" spellcheck="false"></label><label class="field"><span class="label">서브넷 마스크</span><input id="switch-netmask" spellcheck="false"></label><label class="field"><span class="label">관리 게이트웨이</span><input id="switch-gateway" spellcheck="false"></label></div><div class="actions advanced"><button id="switch-management-plan" type="button">주소 변경 내용 확인</button></div><p class="caption">주소 변경 후에는 새 IP로 접속합니다. 적용 전 설정을 백업하고, 새 주소에서 장비와 저장 상태를 확인합니다.</p></div></details>
    <div id="switch-plan-panel" class="panel" hidden><h2>적용할 변경 내용</h2><p id="switch-plan-description"></p><div id="switch-plan-details" class="rule-explain"></div><p id="switch-plan-warnings" class="caption"></p><label class="switch"><input id="switch-confirm" type="checkbox">대상 허브와 포트를 확인했습니다.</label><div class="actions"><button id="switch-apply" type="button" class="primary" disabled>백업 후 적용</button><button id="switch-cancel" type="button">취소</button></div><p class="caption">변경하는 카메라 포트는 영상 수신이 잠시 중단될 수 있습니다. 원본 설정과 적용 결과는 이 ED에 보관됩니다.</p></div>
   </section>
  </main>
@@ -171,9 +380,34 @@ const TOKEN='__RECORDER_TOKEN__';
 const $=id=>document.getElementById(id);let config={},revision='',regions=[],dates=[],dirty=false,lastState={},busy=false,cameraBaseline={mode:'direct'},setupRequired=false,initialLoaded=false;
 const weatherNames={rain:'비',snow:'눈',clear:'맑음',cloudy:'흐림'};
 function message(text,error=false){$('message').textContent=text;$('message').className='notice '+(error?'error':'ok');$('message').hidden=!text;}
-async function api(path,data){const response=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',headers:{'X-Recorder-Token':TOKEN,...(data===undefined?{}:{'Content-Type':'application/json'})},...(data===undefined?{}:{body:JSON.stringify(data)})});const result=await response.json();if(!response.ok)throw Error(result.error||'요청을 처리하지 못했습니다.');return result;}
+async function api(path,data){const response=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',headers:{'X-Recorder-Token':TOKEN,...(data===undefined?{}:{'Content-Type':'application/json'})},...(data===undefined?{}:{body:JSON.stringify(data)})});const result=await response.json();if(!response.ok){
+ const error=new Error(result.error||'요청을 처리하지 못했습니다.');
+ error.status=response.status;throw error;
+ }return result;}
 function markDirty(){dirty=true;$('save-state').textContent='변경한 설정을 저장해 주세요.';$('save-config').disabled=false;}
-function showTab(name){if(caBusy){message('카메라 설정 작업이 끝난 뒤 화면을 이동하세요.');return;}if(name!=='camera-admin')clearCameraPasswords();document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name)));document.querySelectorAll('.tab-pane').forEach(p=>p.hidden=p.id!=='tab-'+name);if(name==='files')loadLibrary();if(name==='snapshots')loadSnapshotsTab();if(name==='switch')loadSwitchConfig();if(name==='camera-admin')loadCameraAdmin();if(name==='ping')loadPingHistory();if(name==='live')loadLiveCameras();else if(liveSession||liveStarting)stopLive();}
+function showTab(name){
+ const panel=$('tab-'+name);
+ if(!panel)return;
+ if(pcBusy||caBusy){message('카메라 설정 작업이 끝난 뒤 화면을 이동하세요.');return;}
+ if(pcSelected)closePortCamera();
+ if(name!=='camera-admin'){
+  clearCameraPasswords();if($('ca-method').value==='direct')resetCaInspection();clearCameraPort();
+ }
+ const changed=panel.hidden;
+ history.replaceState(null,'','#'+name);
+ document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name)));
+ document.querySelectorAll('.tab-pane').forEach(p=>p.hidden=p!==panel);
+ if(changed){message('');panel.scrollIntoView({block:'start'});}
+ if(name!=='live'&&(liveSession||liveStarting))stopLive();
+ switch(name){
+  case 'live': return loadLiveCameras();
+  case 'files': return loadLibrary();
+  case 'snapshots': return loadSnapshotsTab();
+  case 'switch': return loadSwitchConfig();
+  case 'camera-admin': return loadCameraAdmin();
+  case 'ping': return loadPingHistory();
+ }
+}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.go)));
 function option(select,value,label){const o=document.createElement('option');o.value=value;o.textContent=label||value;select.append(o);}
 function populateRegions(region={}){const provinces=[...new Set(regions.map(r=>r[0]))];$('sido').replaceChildren();option($('sido'),'','시·도 선택');provinces.forEach(p=>option($('sido'),p));$('sido').value=provinces.includes(region.sido)?region.sido:'';fillDistrict(region.sigungu,region.eupmyeondong);}
@@ -223,7 +457,10 @@ function renderWeather(w){
  const n=w.network||{};$('weather-data').textContent=n.requests_today===undefined?'':'이 지역 오늘 수신: '+((n.body_bytes_today||0)/1024).toFixed(1)+' KB · 요청 '+n.requests_today+'회 (응답 본문 기준)'+(n.cached?' · 캐시 사용':'');
  $('hourly').replaceChildren();(w.hours||[]).filter(p=>Number(p.time.slice(11,13))%3===0).slice(0,8).forEach(p=>{const div=document.createElement('div');div.className='hour';const t=document.createElement('span');t.textContent=p.time.slice(11,16)+(p.period_hours>1?'–'+p.period_end.slice(11,16):'');const label=document.createElement('strong');label.textContent=p.description||({1:'비',2:'비/눈',3:'눈',4:'소나기'})[p.PTY]||({1:'맑음',3:'구름',4:'흐림'})[p.SKY]||'미확인';div.append(t,label);$('hourly').append(div);});
 }
-async function updateState(){try{lastState=await api('state');setupRequired=!!lastState.setup_required;$('setup-notice').hidden=!setupRequired;const active=lastState.active_cameras?.length||0;$('status-label').textContent=lastState.external_running?'별도 녹화가 실행 중':setupRequired?'카메라 등록 필요':lastState.running?(active?'녹화 중':lastState.mode==='once'?'한 번 녹화 준비 중':'예약 대기 중'):'녹화 중지';$('status-label').classList.toggle('live',active>0);$('status-detail').textContent=lastState.external_running?'기존 서비스를 중지한 뒤 이 화면에서 시작하세요.':setupRequired?(lastState.setup_message||'장비 설정에서 카메라를 등록하고 저장하세요.'):lastState.running?(lastState.mode==='once'?'한 번 녹화 · '+(lastState.once_camera||'모든 카메라')+(lastState.once_end?' · 종료 예정 '+formatTime(lastState.once_end):' · 영상 연결 준비 중'):'시간표와 날씨 조건을 확인하며 실행 중입니다.'):'예약 녹화 또는 한 번 녹화를 시작할 수 있습니다.';updateTestCameras(lastState.cameras||[]);$('camera-count').textContent=(lastState.running&&lastState.mode==='once'&&lastState.once_camera?'1':lastState.cameras?.length||0)+'대';$('disk-free').textContent=lastState.disk?lastState.disk.free_gb+' GiB':'—';$('output-view').textContent=lastState.output_dir||'장비 설정에서 저장 위치를 확인하세요.';$('system-error').hidden=!lastState.error;$('system-error').textContent=lastState.error||'';$('key-status').textContent=lastState.key_present?'인증키가 등록되어 있습니다.':'등록된 인증키가 없습니다.';$('camera-list').replaceChildren();(lastState.cameras||[]).forEach(c=>{const item=document.createElement('span');item.className='camera';item.textContent=c.name+' · client'+c.client_no+' · '+c.direction;$('camera-list').append(item);});$('logs').textContent=(lastState.logs||[]).join('\n')||'화면에서 녹화를 시작하면 기록이 표시됩니다.';renderWeather(lastState.weather||{});applyButtons();}catch(e){$('system-error').textContent='관리 화면 연결이 끊겼습니다. ED에서 프로그램이 실행 중인지 확인하세요.';$('system-error').hidden=false;}}
+async function updateState(){try{lastState=await api('state');setupRequired=!!lastState.setup_required;$('setup-notice').hidden=!setupRequired;const active=lastState.active_cameras?.length||0;$('status-label').textContent=lastState.external_running?'별도 녹화가 실행 중':setupRequired?'카메라 등록 필요':lastState.running?(active?'녹화 중':lastState.mode==='once'?'한 번 녹화 준비 중':'예약 대기 중'):'녹화 중지';$('status-label').classList.toggle('live',active>0);$('status-detail').textContent=lastState.external_running?'기존 서비스를 중지한 뒤 이 화면에서 시작하세요.':setupRequired?(lastState.setup_message||'장비 설정에서 카메라를 등록하고 저장하세요.'):lastState.running?(lastState.mode==='once'?'한 번 녹화 · '+(lastState.once_camera||'모든 카메라')+(lastState.once_end?' · 종료 예정 '+formatTime(lastState.once_end):' · 영상 연결 준비 중'):'시간표와 날씨 조건을 확인하며 실행 중입니다.'):'예약 녹화 또는 한 번 녹화를 시작할 수 있습니다.';updateTestCameras(lastState.cameras||[]);$('camera-count').textContent=(lastState.running&&lastState.mode==='once'&&lastState.once_camera?'1':lastState.cameras?.length||0)+'대';$('disk-free').textContent=lastState.disk?lastState.disk.free_gb+' GiB':'—';$('output-view').textContent=lastState.output_dir||'장비 설정에서 저장 위치를 확인하세요.';$('system-error').hidden=!lastState.error;$('system-error').textContent=lastState.error||'';$('key-status').textContent=lastState.key_present?'인증키가 등록되어 있습니다.':'등록된 인증키가 없습니다.';$('camera-list').replaceChildren();(lastState.cameras||[]).forEach(c=>{const item=document.createElement('span');item.className='camera';item.textContent=c.name+' · client'+c.client_no+' · '+c.direction;$('camera-list').append(item);});$('logs').textContent=(lastState.logs||[]).join('\n')||'화면에서 녹화를 시작하면 기록이 표시됩니다.';renderWeather(lastState.weather||{});applyButtons();}catch(e){
+ $('system-error').textContent=e.status===403?e.message:'관리 화면 연결이 끊겼습니다. ED에서 프로그램이 실행 중인지 확인하세요.';
+ $('system-error').hidden=false;
+}}
 document.querySelectorAll('#tab-schedule input,#tab-schedule select,#tab-device input,#tab-device select,#tab-device textarea').forEach(el=>{if(el.id!=='api-key'&&el.id!=='date-input'){el.addEventListener('change',markDirty);if(el.matches('input,textarea'))el.addEventListener('input',markDirty);}});$('camera-mode').addEventListener('change',updateCameraFields);$('weather-provider').addEventListener('change',updateProviderFields);$('sido').addEventListener('change',()=>fillDistrict());$('sigungu').addEventListener('change',()=>fillTown());$('daily').addEventListener('change',()=>{$('date-fields').hidden=$('daily').checked;if(!$('daily').checked)renderCalendar();});$('add-range').addEventListener('click',()=>{addRange();markDirty();});$('add-date').addEventListener('click',()=>{const value=$('date-input').value;if(value&&!dates.includes(value)){dates.push(value);calendarMonth=value.slice(0,7);renderDates();markDirty();}});$('save-config').addEventListener('click',e=>action(e.currentTarget,save));$('reload-config').addEventListener('click',e=>action(e.currentTarget,async()=>{await loadConfig();message('저장된 설정을 불러왔습니다.');}));$('check-config').addEventListener('click',e=>action(e.currentTarget,async()=>{if(dirty)await save();message((await api('check',{})).message);}));$('start-scheduled').addEventListener('click',e=>action(e.currentTarget,async()=>{if(dirty)await save();message((await api('start',{mode:'scheduled'})).message);}));$('stop-recording').addEventListener('click',e=>action(e.currentTarget,async()=>message((await api('stop',{})).message)));$('test-mode').addEventListener('change',()=>$('test-start').disabled=$('test-mode').value==='now');$('test-minutes').addEventListener('input',()=>$('start-test').textContent=($('test-minutes').value||'0')+'분 시험 녹화');$('start-test').addEventListener('click',e=>action(e.currentTarget,async()=>{if(dirty)await save();const start=$('test-mode').value==='later'?$('test-start').value:null;if($('test-mode').value==='later'&&!start)throw Error('오늘 녹화를 시작할 시각을 선택하세요.');message((await api('start',{mode:'once',minutes:Number($('test-minutes').value),start_at:start,camera:$('test-camera').value})).message);}));$('refresh-weather').addEventListener('click',e=>action(e.currentTarget,async()=>{if(dirty)await save();message((await api('forecast',{})).message);}));$('save-key').addEventListener('click',e=>action(e.currentTarget,async()=>{if(dirty)await save();message((await api('key',{key:$('api-key').value})).message);$('api-key').value='';}));$('discover').addEventListener('click',e=>action(e.currentTarget,async()=>{const r=await api('discover',{});$('setup-options').replaceChildren();if(!r.paths.length)throw Error('자동 검색으로 설정 파일을 찾지 못했습니다. 실제 경로를 입력하세요.');r.paths.forEach(p=>{const b=document.createElement('button');b.type='button';b.className='small';b.textContent=p;b.addEventListener('click',()=>{$('setup-ini').value=p;markDirty();});$('setup-options').append(b);});message('실제 운영 중인 설정 파일을 선택하세요.');}));
 let libraryBusy=false,libraryTrash=false,libraryOffset=0,libraryTotal=0,libraryLimit=50,librarySelected=null,pendingTrash=null,trashFocusReturn=null,libraryFolder="",libraryCurrentFolder=null,libraryFolders=[],libraryBreadcrumbs=[],libraryExpanded=new Set([""]);
 function libraryMessage(text,error=false){$('files-message').textContent=text;$('files-message').className='notice '+(error?'error':'ok');$('files-message').hidden=!text;}
@@ -323,7 +560,7 @@ let liveCameras=[],liveSession=null,liveStarting=false,liveEpoch=0,liveAbort=nul
 function syncRecordingPreset(){const path=$('camera-path').value;$('recording-profile-preset').value=path==='/profile4/media.smp'?'4':path==='/profile2/media.smp'?'2':'custom';}
 $('recording-profile-preset').addEventListener('change',()=>{const value=$('recording-profile-preset').value;if(value!=='custom')$('camera-path').value='/profile'+value+'/media.smp';markDirty();});
 $('camera-path').addEventListener('input',syncRecordingPreset);
-function liveButtons(){const selected=!!$('live-camera').value;const camera=liveCameras.find(c=>c.name===$('live-camera').value);for(const o of $('live-profile').options)o.disabled=o.value!=='current'&&!camera?.can_select_profile;if(!camera?.can_select_profile)$('live-profile').value='current';$('live-start').disabled=!selected||liveStarting||!!liveSession;$('live-stop').disabled=!liveStarting&&!liveSession;}
+function liveButtons(){const selected=!!$('live-camera').value;const camera=liveCameras.find(c=>c.name===$('live-camera').value);for(const o of $('live-profile').options)o.disabled=o.value!=='current'&&!camera?.can_select_profile;if(!camera?.can_select_profile)$('live-profile').value='current';$('live-start').disabled=!selected||liveStarting||!!liveSession;$('live-stop').disabled=!liveStarting&&!liveSession;if(pcSelected)portCameraButtons();}
 async function loadLiveCameras(){try{const r=await api('live/cameras'),previous=$('live-camera').value;liveCameras=r.cameras;$('live-camera').replaceChildren();if(!liveCameras.length)option($('live-camera'),'','저장된 카메라가 없습니다');liveCameras.forEach(c=>option($('live-camera'),c.name,c.name+' · '+c.ip+' · 녹화 '+(c.profile||'직접 경로')));if(liveCameras.some(c=>c.name===previous))$('live-camera').value=previous;liveButtons();}catch(e){message(e.message,true);}}
 function invalidateProfilePlan(){profilePlan=null;$('profile-plan-panel').hidden=true;$('profile-result').replaceChildren();}
 function releaseLiveDisplay(){liveFrameBaseline=null;liveDimensions=null;$('live-metrics').hidden=true;$('live-metrics-note').hidden=true;const v=$('live-video');v.pause();v.removeAttribute('src');v.load();if(liveObjectUrl)URL.revokeObjectURL(liveObjectUrl);liveObjectUrl=null;liveMedia=null;$('live-video-panel').hidden=true;}
@@ -343,10 +580,10 @@ async function consumeLive(info,epoch,abort){
    if(buffer.buffered.length){const end=buffer.buffered.end(buffer.buffered.length-1),start=buffer.buffered.start(0);if(video.currentTime<start||end-video.currentTime>6)video.currentTime=Math.max(start,end-1);if(video.paused)video.play().catch(()=>{$('live-note').textContent='영상이 준비되었습니다. 화면의 재생 버튼을 눌러 주세요.';});}
  }if(epoch===liveEpoch)throw Error('카메라 영상 연결이 종료되었습니다. 다시 재생하세요.');}finally{reader.cancel().catch(()=>{});}
 }
-async function startLive(){
+async function startLive(openSession){
  if(liveStarting||liveSession)return;if(!window.MediaSource){message('이 브라우저는 실시간 영상 재생을 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용하세요.',true);return;}
  message('');const epoch=++liveEpoch;liveStarting=true;liveButtons();$('live-note').textContent='카메라에 연결하고 있습니다…';let info;
- try{info=await api('live/start',{camera:$('live-camera').value,profile:$('live-profile').value});if(epoch!==liveEpoch){await api('live/stop',{session:info.session_id});return;}
+ try{info=typeof openSession==='function'?await openSession():await api('live/start',{camera:$('live-camera').value,profile:$('live-profile').value});if(epoch!==liveEpoch){await api('live/stop',{session:info.session_id});return;}
   liveSession=info.session_id;liveDimensions=info;$('live-resolution').textContent=info.width+' × '+info.height;$('live-fps').textContent='측정 중';$('live-dropped').textContent='0';$('live-metrics').hidden=false;$('live-metrics-note').hidden=false;if(!MediaSource.isTypeSupported(info.mime))throw Error('이 브라우저가 해당 H.264 영상을 지원하지 않습니다. 다른 브라우저 또는 HD 프로필로 시도하세요.');liveStarting=false;liveButtons();const abort=new AbortController();liveAbort=abort;await consumeLive(info,epoch,abort);
  }catch(e){if(epoch===liveEpoch){await stopLive(e.name==='AbortError'?'재생을 중지했습니다.':e.message);if(e.name!=='AbortError')message(e.message,true);}}
  finally{if(epoch===liveEpoch){liveStarting=false;liveButtons();}}
@@ -427,19 +664,32 @@ $('snap-refresh').onclick=loadSnapshotsTab;
 $('snap-capture').onclick=()=>captureImage($('snap-camera').value,$('snap-profile').value);
 $('live-capture').onclick=()=>captureImage($('live-camera').value,$('live-profile').value);
 
-let caBusy=false,caInspection=null,caPlan=null,ciInspection=null,ciPlan=null;
-function clearCaPlan(){caPlan=null;$('ca-plan-panel').hidden=true;$('ca-confirm').checked=false;cameraAdminButtons();}
+let caBusy=false,caInspection=null,caPlan=null,ciInspection=null,ciPlan=null,cameraPortContext=null;
+function clearCaPlan(){caPlan=null;$('ca-username-note').textContent='';$('ca-network-note').textContent='';$('ca-plan-panel').hidden=true;$('ca-confirm').checked=false;cameraAdminButtons();}
 function clearCiPlan(){ciPlan=null;$('ci-plan-panel').hidden=true;$('ci-confirm').checked=false;cameraAdminButtons();}
-function clearCameraPasswords(){for(const id of ['ca-password','ca-password-repeat','ci-password','ci-password-repeat'])$(id).value='';clearCaPlan();clearCiPlan();}
+function clearCameraPasswords(){for(const id of ['ca-password','ca-password-repeat','ci-password','ci-password-repeat','ca-secret'])$(id).value='';clearCaPlan();clearCiPlan();}
 function cameraAdminButtons(){
  $('ca-apply').disabled=caBusy||!caPlan||!$('ca-confirm').checked;
  $('ci-apply').disabled=caBusy||!ciPlan||!$('ci-confirm').checked;
- $('ca-network-plan').disabled=caBusy||!caInspection?.supported?.network;
+ const direct=$('ca-method').value==='direct';
+ const canSetNetwork=Boolean(caInspection?.supported?.network);
+ for(const id of ['ca-ip','ca-mask','ca-gateway','ca-network-plan'])$(id).disabled=caBusy||!canSetNetwork;
+ $('ca-defer').disabled=caBusy||!canSetNetwork||!direct;
+ $('ca-handover-field').hidden=!direct;
+ $('ca-identity').hidden=!caInspection;
+ $('ca-account-extra').hidden=!caInspection;
+ $('ca-one-field').hidden=!direct||!caInspection;
+ $('ca-one').disabled=caBusy||!direct||!caInspection;
+ const networkAccess=$('ca-network-access');
+ networkAccess.hidden=canSetNetwork;
+ networkAccess.textContent=caInspection?'카메라에서 IP 변경 지원을 확인하지 못했습니다.':direct?'현재 카메라 비밀번호를 입력하고 ‘카메라 조회’를 누르면 새 IP를 입력할 수 있습니다.':'저장된 카메라를 선택하고 ‘현재 설정 조회’를 누르면 새 IP를 입력할 수 있습니다.';
  $('ca-password-plan').disabled=caBusy||!caInspection?.supported?.password;
  $('ca-user').disabled=caBusy||!caInspection?.can_change_username;
+ $('ca-username-plan').disabled=caBusy||!caInspection?.can_change_username;
  $('ci-user').disabled=caBusy||!ciInspection?.initialized;
  $('ci-plan').disabled=caBusy||!ciInspection?.activation_available||!$('ci-isolated').checked;
  $('ci-register').disabled=caBusy||!ciInspection?.initialized||!$('ci-isolated').checked;
+ $('ci-account-check').disabled=caBusy||!ciInspection?.initialized;
 }
 async function cameraAdminAction(fn,noteId='ca-note'){
  if(caBusy||busy)return;caBusy=true;busy=true;const controls=[...document.querySelectorAll('#tab-camera-admin input,#tab-camera-admin select,#tab-camera-admin button,[data-tab],.savebar button')].map(el=>[el,el.disabled]);for(const [el]of controls)el.disabled=true;
@@ -448,36 +698,186 @@ async function cameraAdminAction(fn,noteId='ca-note'){
  finally{for(const [el,disabled]of controls)el.disabled=disabled;caBusy=false;busy=false;applyButtons();cameraAdminButtons();}
 }
 async function loadCameraAdmin(preferred){
+ if($('ca-method').value==='direct'&&!preferred){resetCaInspection();return;}
  await cameraAdminAction(async()=>{const selected=preferred||$('ca-camera').value;const r=setupRequired?{cameras:[]}:await api('live/cameras');$('ca-camera').replaceChildren();for(const c of r.cameras||[])option($('ca-camera'),c.name,c.name+' · '+c.ip);if(!r.cameras?.length)option($('ca-camera'),'','등록된 카메라 없음');else if(r.cameras.some(c=>c.name===selected))$('ca-camera').value=selected;resetCaInspection();});
 }
-function resetCaInspection(){caInspection=null;$('ca-settings').hidden=true;clearCaPlan();$('ca-password').value='';$('ca-password-repeat').value='';$('ca-note').textContent='현재 설정 조회로 대상 카메라를 확인하세요.';}
-function caIdentityText(r){const i=r.identity||{};return [r.camera,r.host,i.Model||i.model,i.SerialNumber||i.serial,i.ConnectedMACAddress||i.mac,r.mac].filter(Boolean).join(' · ');}
-async function inspectCameraAdmin(){
- resetCaInspection();$('ca-note').textContent='카메라의 장비 정보와 현재 IP·계정을 조회하고 있습니다…';
- const r=await api('camera-admin/inspect',{camera:$('ca-camera').value});caInspection=r;
- $('ca-identity').textContent=caIdentityText(r);const n=r.network||{};$('ca-ip').value=n.ip||r.host||'';$('ca-mask').value=n.netmask||'';$('ca-gateway').value=n.gateway||'';$('ca-user').value=r.username||'';
- $('ca-user-hint').textContent=r.can_change_username?'이 카메라는 관리자 아이디 변경을 지원합니다.':'이 카메라는 현재 아이디를 유지합니다.';
- $('ca-note').textContent=(r.warnings||[]).join(' / ')||'현재 설정을 조회했습니다. 변경할 내용을 입력하세요.';$('ca-settings').hidden=false;
+function clearCaInspection(){
+ caInspection=null;
+ for(const id of ['ca-ip','ca-mask','ca-gateway','ca-user','ca-password','ca-password-repeat'])$(id).value='';
+ $('ca-one').checked=false;$('ca-defer').checked=false;
+ $('ca-account-extra').open=false;$('ca-password-extra').open=false;
+ $('ca-identity').textContent='';$('ca-user-hint').textContent='';
+ clearCaPlan();clearCameraPort();
 }
+function resetCaInspection(){
+ clearCaInspection();
+ $('ca-note').textContent=$('ca-method').value==='direct'?'현재 카메라 계정으로 접속하세요.':'저장된 카메라를 선택하고 조회하세요.';
+}
+function caIdentityText(r){const i=r.identity||{};return [r.camera,r.host,i.Model||i.model,i.SerialNumber||i.serial,i.ConnectedMACAddress||i.mac,r.mac].filter(Boolean).join(' · ');}
+function directTarget() {
+ const camera=caInspection;
+ return {ip:camera.host, username:$('ca-login').value.trim(), password:$('ca-secret').value,
+         expected_mac:camera.identity.ConnectedMACAddress, expected_cert_sha256:camera.certificate_sha256};
+}
+function setCameraMethod(method){
+ $('ca-method').value=method;
+ const direct=method==='direct';
+ $('ca-direct-fields').hidden=!direct;
+ $('ca-saved-fields').hidden=direct;
+ $('ca-password-extra').hidden=direct;
+ $('ca-secret').value='';
+ resetCaInspection();
+}
+$('ca-method').onchange=()=>{setCameraMethod($('ca-method').value);if($('ca-method').value==='saved')loadCameraAdmin();};
+for(const id of ['ca-address','ca-login','ca-secret'])$(id).addEventListener('input',()=>{
+ if(id==='ca-address'){cameraPortContext=null;$('camera-port-context').hidden=true;}resetCaInspection();
+});
+async function inspectCameraAdmin(){
+ resetCaInspection();
+ $('ca-note').textContent='카메라의 현재 설정을 조회하고 있습니다…';
+ const direct=$('ca-method').value==='direct';
+ let result;
+ if(direct){
+  const ip=$('ca-address').value.trim(),username=$('ca-login').value.trim(),password=$('ca-secret').value;
+  if(!ip)throw Error('현재 카메라 IP를 입력하세요.');
+  const expected=cameraPortContext?.ip===ip?{expected_mac:cameraPortContext.mac}:{};
+  const identity=await api('camera-activation/inspect',{ip,...expected});
+  updateCameraPort(ip,identity.mac);
+  if(!identity.initialized){
+   $('camera-new-panel').open=true;
+   $('ci-ip').value=ip;$('ci-source').value=identity.source;$('ci-isolated').checked=false;clearCiPlan();renderInitialCamera(identity);
+   $('camera-new-panel').scrollIntoView({block:'center'});$('ca-note').textContent='최초 비밀번호 설정이 필요한 카메라입니다.';return;
+  }
+  if(!username||!password)throw Error('카메라가 응답했습니다. IP와 아이디를 변경하려면 현재 카메라 계정을 입력하고 다시 조회하세요.');
+  result=await api('camera-admin/inspect-candidate',{ip,username,password,expected_mac:identity.mac,expected_cert_sha256:identity.cert_sha256});
+ }else{
+  result=await api('camera-admin/inspect',{camera:$('ca-camera').value});
+  updateCameraPort(result.host,result.identity.ConnectedMACAddress);
+ }
+ if(cameraPortContext?.ip===result.host&&String(result.identity?.ConnectedMACAddress||'').toLowerCase().replaceAll('-',':')!==cameraPortContext.mac.toLowerCase().replaceAll('-',':'))throw Error('선택한 장치와 현재 카메라 MAC이 다릅니다. 대상을 다시 확인하세요.');
+ caInspection=result;
+ $('ca-identity').textContent=caIdentityText(result);
+ const network=result.network||{};
+ $('ca-ip').value=network.ip||result.host;$('ca-mask').value=network.netmask||'';$('ca-gateway').value=network.gateway||'';$('ca-user').value='';
+ const userHint=result.can_change_username?'새 아이디를 입력하면 현재 비밀번호를 유지합니다.':'이 카메라에서 관리자 아이디 변경을 사용할 수 없습니다.';
+ $('ca-user-hint').textContent='현재 아이디 '+result.username+' · '+userHint;
+ $('ca-password-extra').hidden=direct;
+ $('ca-note').textContent='변경할 항목을 선택하세요.';cameraAdminButtons();
+}
+$('ca-connect').onclick=()=>cameraAdminAction(inspectCameraAdmin);
+$('ca-username-plan').onclick=()=>cameraAdminAction(()=>planCameraAdmin('username'),'ca-username-note');
+$('ca-one').onchange=clearCaPlan;
+$('ca-defer').onchange=clearCaPlan;
 async function planCameraAdmin(action){
- if(!caInspection||caInspection.camera!==$('ca-camera').value)throw Error('현재 카메라 설정을 다시 조회하세요.');
+ const direct=$('ca-method').value==='direct';
+ if(!caInspection||(!direct&&caInspection.camera!==$('ca-camera').value))throw Error('현재 카메라 설정을 다시 조회하세요.');
+ if(direct&&!$('ca-one').checked)throw Error('조회한 IP와 MAC이 변경할 카메라인지 확인하고 체크하세요.');
  const change={camera:$('ca-camera').value,action,expected_host:caInspection.host,expected_mac:caInspection.identity?.ConnectedMACAddress,expected_cert_sha256:caInspection.certificate_sha256};
- if(action==='network')Object.assign(change,{ip:$('ca-ip').value.trim(),netmask:$('ca-mask').value.trim(),gateway:$('ca-gateway').value.trim()});
- else{if(!$('ca-password').value||$('ca-password').value!==$('ca-password-repeat').value)throw Error('새 비밀번호를 두 칸에 동일하게 입력하세요.');Object.assign(change,{new_username:$('ca-user').value.trim(),new_password:$('ca-password').value,confirm_password:$('ca-password-repeat').value});}
- clearCaPlan();const p=await api('camera-admin/plan',change);caPlan=p;
- $('ca-plan-text').textContent=caIdentityText(caInspection)+'\n'+(action==='network'?'IP: '+caInspection.host+' → '+change.ip+'\n마스크: '+change.netmask+'\n게이트웨이: '+change.gateway:'아이디: '+caInspection.username+' → '+change.new_username+'\n비밀번호: 새 비밀번호로 변경');
+ if(direct){delete change.camera;change.direct_target=directTarget();change.isolated=$('ca-one').checked;}
+ if(action==='username'){
+  change.new_username=$('ca-user').value.trim();
+  if(!change.new_username||change.new_username===caInspection.username)throw Error('현재 아이디와 다른 새 아이디를 입력하세요.');
+ }
+ else if(action==='network'){
+  Object.assign(change,{ip:$('ca-ip').value.trim(),netmask:$('ca-mask').value.trim(),gateway:$('ca-gateway').value.trim()});
+  if(direct&&$('ca-defer').checked)change.defer_reconnect=true;
+ }
+ else{if(!$('ca-password').value||$('ca-password').value!==$('ca-password-repeat').value)throw Error('새 비밀번호를 두 칸에 동일하게 입력하세요.');Object.assign(change,{new_username:$('ca-user').value.trim()||caInspection.username,new_password:$('ca-password').value,confirm_password:$('ca-password-repeat').value});}
+ clearCaPlan();const p=await api('camera-admin/plan',change);
+ if(change.defer_reconnect&&!p.defer_reconnect)throw Error('서버가 새 IP 재접속 생략을 확인하지 못했습니다. 관리 프로그램 버전을 확인하세요.');
+ caPlan=p;
+ $('ca-plan-text').textContent=caIdentityText(caInspection)+'\n'+(action==='network'?'IP: '+caInspection.host+' → '+change.ip+'\n마스크: '+change.netmask+'\n게이트웨이: '+change.gateway+'\n현재 아이디·비밀번호 유지':'아이디: '+caInspection.username+' → '+change.new_username+(action==='username'?'\n현재 비밀번호 유지':'\n비밀번호 변경'));
+ if(p.defer_reconnect)$('ca-plan-text').textContent+='\n현재 주소에서 한 번 전송 · 새 IP 재접속 생략 · 녹화기 저장 주소 유지';
+ $('ca-apply').textContent={network:'IP 주소 변경 적용',username:'아이디 변경 적용',password:'계정 변경 적용'}[action];
  $('ca-plan-warnings').textContent=(p.warnings||[]).join(' / ');$('ca-plan-panel').hidden=false;$('ca-plan-panel').scrollIntoView({block:'center',behavior:'smooth'});
 }
-$('ca-camera').onchange=resetCaInspection;$('ca-refresh').onclick=()=>loadCameraAdmin();$('ca-inspect').onclick=()=>cameraAdminAction(inspectCameraAdmin);
-$('ca-network-plan').onclick=()=>cameraAdminAction(()=>planCameraAdmin('network'));$('ca-password-plan').onclick=()=>cameraAdminAction(()=>planCameraAdmin('password'));
+$('ca-camera').onchange=()=>{cameraPortContext=null;$('camera-port-context').hidden=true;resetCaInspection();};$('ca-refresh').onclick=()=>loadCameraAdmin();$('ca-inspect').onclick=()=>cameraAdminAction(inspectCameraAdmin);
+$('ca-network-plan').onclick=()=>cameraAdminAction(()=>planCameraAdmin('network'),'ca-network-note');$('ca-password-plan').onclick=()=>cameraAdminAction(()=>planCameraAdmin('password'));
 $('ca-confirm').onchange=cameraAdminButtons;$('ca-cancel').onclick=()=>{clearCaPlan();$('ca-password').value='';$('ca-password-repeat').value='';};
 $('ca-apply').onclick=()=>cameraAdminAction(async()=>{
- if(!caPlan||!$('ca-confirm').checked)return;const p=caPlan;const body={plan_id:p.plan_id,confirm:true};if(p.action==='password')Object.assign(body,{new_password:$('ca-password').value,confirm_password:$('ca-password-repeat').value,new_username:$('ca-user').value.trim()});clearCaPlan();
- $('ca-note').textContent='대상과 주소 중복을 다시 검사한 뒤 변경을 적용하고 있습니다…';
- try{const r=await api('camera-admin/apply',body);$('ca-note').textContent=({applied:'변경 완료',camera_changed_local_pending:'카메라 변경됨 · 녹화기 정보 확인 필요',unverified:'변경 결과 확인 필요'}[r.status]||r.status)+' · '+(r.detail||r.message||'')+(r.backup_path?' · 백업: '+r.backup_path:'');message($('ca-note').textContent,r.status!=='applied');if(r.recorder_updated)await loadConfig();caInspection=null;$('ca-settings').hidden=true;}
- finally{$('ca-password').value='';$('ca-password-repeat').value='';}
+ if(!caPlan||!$('ca-confirm').checked)return;
+ const p=caPlan, body={plan_id:p.plan_id,confirm:true};
+ if(p.action==='password')Object.assign(body,{new_password:$('ca-password').value,confirm_password:$('ca-password-repeat').value,new_username:p.after.username});
+ clearCaPlan();
+ $('ca-note').textContent=p.defer_reconnect?'현재 카메라를 확인하고 IP 변경 요청을 전송합니다…':'대상을 다시 확인한 뒤 변경을 적용하고 있습니다…';
+ let result;
+ try{
+  result=await api('camera-admin/apply',body);
+ }catch(e){
+  if(e instanceof TypeError||e instanceof SyntaxError){
+   $('ca-secret').value='';clearCaInspection();cameraPortContext=null;$('camera-port-context').hidden=true;
+   throw Error('관리 화면이 결과를 받지 못했습니다. 적용 여부를 확인한 후 다시 진행하세요.');
+  }
+  throw e;
+ }finally{$('ca-password').value='';$('ca-password-repeat').value='';}
+ const labels={
+  applied:p.action==='network'?'IP 변경 완료 · 새 IP 재접속 확인':'변경 완료',
+  accepted_unverified:'카메라가 변경 요청을 수락했습니다 · 새 IP 재접속 미확인',
+  rejected:'카메라가 변경 요청을 거부했습니다',
+  unverified:'변경 결과 미확인',
+  camera_changed_local_pending:'카메라 변경 확인 · 녹화기 정보 확인 필요'
+ };
+ const addressChange=p.action==='network'?p.camera_host+' → '+p.after.ip+' · ':'';
+ const detail=result.detail||result.message||'';
+ const summary=result.status==='rejected'&&detail?detail:[labels[result.status]||result.status,detail].filter(Boolean).join(' · ');
+ $('ca-note').textContent=addressChange+summary+(result.backup_path?' · 백업: '+result.backup_path:'');
+ message($('ca-note').textContent,result.status!=='applied');
+ if(result.status==='accepted_unverified')$('message').className='notice';
+ if($('ca-method').value==='direct'){
+  if(result.status==='applied'&&p.action==='network')$('ca-address').value=p.after.ip;
+  if(result.status==='applied'&&p.action==='username')$('ca-login').value=p.after.username;
+  $('ca-secret').value='';
+ }
+ clearCaInspection();cameraPortContext=null;$('camera-port-context').hidden=true;
+ if(result.recorder_updated)await loadConfig();
 });
 for(const id of ['ca-ip','ca-mask','ca-gateway','ca-user','ca-password','ca-password-repeat'])$(id).addEventListener('input',clearCaPlan);
+let optionalPortCamera=null, optionalPortSwitches=[], optionalPortTimer, optionalPortBusy=false;
+function clearCameraPort(){
+ optionalPortCamera=null;optionalPortSwitches=[];optionalPortBusy=false;clearTimeout(optionalPortTimer);
+ $('opt-port-block').hidden=true;$('opt-port-more').open=false;$('opt-port-inputs').hidden=true;
+ $('opt-port-login').hidden=true;$('opt-port-password').value='';$('opt-port-switch').replaceChildren();
+ $('opt-port-extra').textContent='';$('opt-port-status').textContent='미확인';
+}
+function showOptionalSwitch(){
+ const selected=optionalPortSwitches.find(s=>s.id===$('opt-port-switch').value);
+ $('opt-port-password').value='';$('opt-port-route').textContent=selected?(selected.ready?'허브 관리 주소 '+selected.target:selected.target+' · '+selected.reason):'';
+ $('opt-port-login').hidden=!selected?.ready;$('opt-port-check').disabled=optionalPortBusy;
+}
+async function updateCameraPort(ip,mac){
+ clearCameraPort();if(!ip||!mac)return;
+ const camera={ip,mac:String(mac).toLowerCase().replaceAll('-',':')};optionalPortCamera=camera;
+ $('opt-port-block').hidden=false;$('opt-port-status').textContent='포트 관측 기록 조회 중…';
+ try{const response=await api('camera-port?'+new URLSearchParams(camera));if(camera!==optionalPortCamera)return;
+  optionalPortSwitches=response.switches||[];const matches=response.matches||[];
+  if(matches.length){$('opt-port-status').textContent=matches.map(m=>m.name+' · '+m.port+'번 ('+m.observed_at.slice(11,19)+' KST 조회)').join(' / ');
+   optionalPortTimer=setTimeout(()=>{if(camera===optionalPortCamera)$('opt-port-status').textContent='포트 미확인 · 최근 관측이 만료되었습니다.';},Math.min(...matches.map(m=>m.expires_in))*1000);}
+  else if(!optionalPortSwitches.length)$('opt-port-status').textContent='포트 미확인 · 등록된 허브가 없습니다.';
+  else if(!optionalPortSwitches.some(s=>s.ready))$('opt-port-status').textContent='포트 미확인 · '+optionalPortSwitches.map(s=>s.name+' '+s.target+' — '+(s.reason||'관리 경로 없음')).join(' / ');
+  else $('opt-port-status').textContent='포트 미확인 · 허브에서 현재 포트를 조회할 수 있습니다.';
+  const select=$('opt-port-switch');for(const s of optionalPortSwitches)option(select,s.id,s.name+' · '+s.target);
+  const ready=optionalPortSwitches.find(s=>s.ready);if(ready)select.value=ready.id;
+  $('opt-port-inputs').hidden=!optionalPortSwitches.length;$('opt-port-extra').textContent=optionalPortSwitches.length?'':'허브 관리 탭에서 접속 정보를 저장하면 포트도 조회할 수 있습니다.';showOptionalSwitch();
+ }catch(e){if(camera===optionalPortCamera)$('opt-port-status').textContent='포트 미확인 · '+e.message;}
+}
+$('opt-port-switch').onchange=showOptionalSwitch;
+$('opt-port-more').ontoggle=()=>{if(!$('opt-port-more').open)$('opt-port-password').value='';};
+$('opt-port-check').onclick=async()=>{
+ const camera=optionalPortCamera,hub=optionalPortSwitches.find(s=>s.id===$('opt-port-switch').value);
+ if(!camera||!hub?.ready||optionalPortBusy)return;
+ clearTimeout(optionalPortTimer);optionalPortBusy=true;$('opt-port-check').disabled=true;$('opt-port-switch').disabled=true;
+ const data={switch_id:hub.id,password:$('opt-port-password').value,candidate_ips:[camera.ip]};$('opt-port-password').value='';
+ $('opt-port-status').textContent=hub.name+'에서 '+camera.ip+'의 포트를 확인 중…';
+ try{const result=await api('switch/inspect',data);if(camera!==optionalPortCamera)return;
+  const found=(result.candidate_matches||[]).filter(m=>m.ip===camera.ip);
+  if(found.length!==1||found[0].mac!==camera.mac||!found[0].probe_fresh||found[0].status!=='matched'||!found[0].direct_port){
+   const device=found.length===1?found[0]:null;const reason=device?.mac&&device.mac!==camera.mac?'조회한 카메라와 MAC이 다릅니다.':device?.reason||(result.warnings||[]).join(' / ')||'단일 연결 포트를 확인할 수 없습니다.';
+   $('opt-port-status').textContent='포트 미확인 · '+reason;return;}
+  await updateCameraPort(camera.ip,camera.mac);
+ }catch(e){if(camera===optionalPortCamera)$('opt-port-status').textContent='포트 미확인 · '+e.message;}
+ finally{if(camera===optionalPortCamera){optionalPortBusy=false;$('opt-port-check').disabled=false;}$('opt-port-switch').disabled=optionalPortBusy;}
+};
+
 const initialCameraAction=fn=>cameraAdminAction(fn,'ci-note');
 function ciPayload(){if(!ciInspection)throw Error('카메라 초기 등록 상태를 먼저 조회하세요.');return {ip:ciInspection.ip,source:ciInspection.source,isolated:$('ci-isolated').checked,expected_mac:ciInspection.mac,expected_cert_sha256:ciInspection.cert_sha256};}
 function renderInitialCamera(r){
@@ -486,15 +886,22 @@ function renderInitialCamera(r){
  const policy=r.password_policy||{};$('ci-policy').textContent=r.initialized?'현재 계정으로 장비를 검증한 뒤 등록할 수 있습니다.':'카메라 비밀번호 정책: '+(policy.minimum||8)+'~'+(policy.maximum||64)+'자. 영문·숫자·특수문자를 조합하세요.';
  $('ci-note').textContent=r.notice||'실제 카메라 한 대만 분리되어 있는지 확인하세요.';
 }
-$('ci-inspect').onclick=()=>initialCameraAction(async()=>{clearCiPlan();ciInspection=null;$('ci-details').hidden=true;$('ci-isolated').checked=false;$('ci-password').value='';$('ci-password-repeat').value='';$('ci-note').textContent='초기 등록 상태를 조회하고 있습니다…';renderInitialCamera(await api('camera-activation/inspect',{ip:$('ci-ip').value.trim(),source:$('ci-source').value.trim()||undefined}));});
+$('ci-inspect').onclick=()=>initialCameraAction(async()=>{clearCiPlan();ciInspection=null;$('ci-details').hidden=true;$('ci-isolated').checked=false;$('ci-password').value='';$('ci-password-repeat').value='';$('ci-note').textContent='초기 등록 상태를 조회하고 있습니다…';renderInitialCamera(await api('camera-activation/inspect',{ip:$('ci-ip').value.trim(),source:$('ci-source').value.trim()||undefined,...(cameraPortContext?.ip===$('ci-ip').value.trim()?{expected_mac:cameraPortContext.mac}:{})}));});
 $('ci-isolated').onchange=()=>{clearCiPlan();cameraAdminButtons();};$('ci-confirm').onchange=cameraAdminButtons;
 $('ci-plan').onclick=()=>initialCameraAction(async()=>{if(!$('ci-password').value||$('ci-password').value!==$('ci-password-repeat').value)throw Error('설정할 비밀번호를 두 칸에 동일하게 입력하세요.');clearCiPlan();const p=await api('camera-activation/plan',ciPayload());ciPlan=p;$('ci-plan-text').textContent=ciInspection.ip+' · MAC '+ciInspection.mac+'의 admin 최초 비밀번호를 등록합니다. 이 확인은 5분 동안 유효합니다.';$('ci-plan-panel').hidden=false;});
 $('ci-apply').onclick=()=>initialCameraAction(async()=>{if(!ciPlan||!$('ci-confirm').checked)return;const token=ciPlan.token;clearCiPlan();$('ci-note').textContent='대상 확인 후 최초 비밀번호를 적용하고 있습니다…';const r=await api('camera-activation/apply',{token,new_password:$('ci-password').value,confirm_password:$('ci-password-repeat').value});renderInitialCamera({...ciInspection,...r,activation_available:false});$('ci-note').textContent=r.message;message(r.message);$('ci-password-repeat').value='';});
-$('ci-register').onclick=()=>initialCameraAction(async()=>{const r=await api('camera-admin/register',{...ciPayload(),username:$('ci-user').value.trim(),password:$('ci-password').value,profile:$('ci-profile').value});$('ci-password').value='';await loadConfig();$('ci-note').textContent=r.message||'카메라 접속 정보를 추가했습니다. 위 목록을 새로고침한 뒤 IP를 변경하세요.';message($('ci-note').textContent);const list=await api('live/cameras');$('ca-camera').replaceChildren();for(const c of list.cameras||[])option($('ca-camera'),c.name,c.name+' · '+c.ip);if(r.camera)$('ca-camera').value=r.camera;resetCaInspection();});
-for(const id of ['ci-ip','ci-source'])$(id).addEventListener('input',()=>{ciInspection=null;clearCiPlan();$('ci-details').hidden=true;$('ci-password').value='';$('ci-password-repeat').value='';});
+$('ci-register').onclick=()=>initialCameraAction(async()=>{
+ const r=await api('camera-admin/register',{...ciPayload(),username:$('ci-user').value.trim(),password:$('ci-password').value,profile:$('ci-profile').value});$('ci-password').value='';
+ $('ci-note').textContent='카메라 접속 정보 등록을 완료했습니다.';message($('ci-note').textContent);
+ try{setCameraMethod('saved');await loadConfig();const list=await api('live/cameras');$('ca-camera').replaceChildren();for(const c of list.cameras||[])option($('ca-camera'),c.name,c.name+' · '+c.ip);if(!r.camera||![...$('ca-camera').options].some(o=>o.value===r.camera))throw Error('등록한 카메라 목록을 다시 불러오세요.');$('ca-camera').value=r.camera;resetCaInspection();await inspectCameraAdmin();$('ca-settings').scrollIntoView({block:'center',behavior:'smooth'});$('ci-note').textContent='접속 정보를 등록했습니다. 위에서 새 IP·마스크·게이트웨이를 입력하고 변경 내용을 확인하세요.';}
+ catch(e){resetCaInspection();$('ci-note').textContent='접속 정보 등록은 완료했습니다. 후속 화면 확인이 필요합니다: '+e.message;message($('ci-note').textContent,true);}
+});
+$('ci-account-check').onclick=()=>initialCameraAction(async()=>{const r=await api('camera-admin/inspect-candidate',{...ciPayload(),username:$('ci-user').value.trim(),password:$('ci-password').value});$('ci-identity').textContent=caIdentityText(r)+'\nIP: '+r.network.ip+' / '+r.network.netmask+' · 게이트웨이 '+(r.network.gateway||'없음');$('ci-note').textContent='계정과 장비를 확인했습니다. 위의 ‘카메라 IP 직접 입력’에서 IP와 아이디를 변경할 수 있습니다.';});
+$('ci-find-port').onclick=async()=>{const ip=$('ci-ip').value.trim()||'';await showTab('switch');$('switch-candidate-ip').value=ip;$('switch-candidate-result').textContent='허브 접속 정보를 확인하고 “포트와 IP 함께 조회”를 누르세요.';};
+for(const id of ['ci-ip','ci-source'])$(id).addEventListener('input',()=>{ciInspection=null;cameraPortContext=null;$('camera-port-context').hidden=true;clearCiPlan();$('ci-details').hidden=true;$('ci-password').value='';$('ci-password-repeat').value='';});
 for(const id of ['ci-password','ci-password-repeat'])$(id).addEventListener('input',clearCiPlan);
 
-let switches=[],switchInspection=null,switchPlan=null,switchBusy=false;
+let switches=[],switchInspection=null,switchPlan=null,switchBusy=false,switchNetwork={};
 const switchFields={name:'switch-name',target:'switch-target',source:'switch-source',interface:'switch-interface',username:'switch-user',expected_cpu_mac:'switch-mac'};
 function clearSwitchPlan(){switchPlan=null;$('switch-plan-panel').hidden=true;$('switch-confirm').checked=false;$('switch-apply').disabled=true;}
 function switchCredentials(){return {switch_id:$('switch-select').value,password:$('switch-password').value};}
@@ -502,39 +909,523 @@ function selectedSwitch(){return switches.find(s=>s.id===$('switch-select').valu
 function updateSwitchFields(value){for(const [key,id]of Object.entries(switchFields))$(id).value=value[key]||'';$('switch-camera-ports').value=(value.camera_ports||[]).join(',');}
 function switchConnection(){const value={id:$('switch-select').value||('switch_'+Date.now())};for(const [key,id]of Object.entries(switchFields))value[key]=$(id).value.trim();value.camera_ports=$('switch-camera-ports').value.trim()?$('switch-camera-ports').value.split(',').map(x=>Number(x.trim())):[];return value;}
 function requireSavedSwitch(){const saved=selectedSwitch();if(!saved)throw Error('먼저 허브 접속 정보를 저장하세요.');const current=switchConnection();for(const k of Object.keys(current))if(JSON.stringify(current[k])!==JSON.stringify(saved[k]??(k==='camera_ports'?[]:'')))throw Error('수정한 접속 정보를 저장한 뒤 조회하세요.');}
-function fillSwitchConnection(){updateSwitchFields(selectedSwitch()||{});$('switch-password').value='';switchInspection=null;clearSwitchPlan();$('switch-identity').hidden=true;$('switch-state-panel').hidden=true;$('switch-management-panel').hidden=true;}
+$('switch-saved-live').onclick=()=>showTab('live');
+function fillSwitchConnection(){
+ const saved=selectedSwitch();
+ $('switch-connection-details').open=!saved;
+ $('switch-find-details').open=false;$('switch-state-panel').open=false;$('switch-management-panel').open=false;
+ $('switch-note').textContent=saved?'허브 비밀번호를 입력하고 포트를 조회하세요.':'아래에서 새 허브의 접속 정보를 저장하세요.';
+ if(pcSelected)closePortCamera();updateSwitchFields(selectedSwitch()||{});$('switch-password').value='';switchInspection=null;clearSwitchPlan();$('switch-identity').hidden=true;$('switch-state-panel').hidden=true;$('switch-management-panel').hidden=true;renderUnknownHub();$('switch-candidate-result').replaceChildren();renderSwitchNetwork();}
 async function loadSwitchConfig(preferred){
- await switchAction(async()=>{const current=preferred||$('switch-select').value;const result=await api('switch/config');switches=result.switches||[];$('switch-select').replaceChildren();option($('switch-select'),'','새 허브 등록');for(const s of switches)option($('switch-select'),s.id,s.name+' · '+s.target);if(switches.some(s=>s.id===current))$('switch-select').value=current;fillSwitchConnection();});
+ await switchAction(()=>refreshSwitchConfig(preferred||$('switch-select').value));
 }
-async function switchAction(fn){if(switchBusy)return;switchBusy=true;const controls=Array.from($('tab-switch').querySelectorAll('input,select,button')).map(el=>[el,el.disabled]);for(const [el]of controls)el.disabled=true;try{await fn();}catch(e){$('switch-note').textContent=e.message;message(e.message,true);}finally{for(const [el,disabled]of controls)el.disabled=disabled;switchBusy=false;$('switch-apply').disabled=!$('switch-confirm').checked||!switchPlan;}}
+async function refreshSwitchConfig(current){
+ switchNetwork=await api('switch/config');
+ switches=switchNetwork.switches||[];
+ renderSwitchInterfaces();
+ const select=$('switch-select');select.replaceChildren();option(select,'','새 허브 등록');
+ for(const row of switches)option(select,row.id,row.name+' · '+row.target);
+ if(switches.some(row=>row.id===current))select.value=current;else if(switches.length===1)select.value=switches[0].id;
+ fillSwitchConnection();
+}
+async function switchAction(fn){if(switchBusy||pcBusy)return;switchBusy=true;const controls=Array.from($('tab-switch').querySelectorAll('input,select,button')).map(el=>[el,el.disabled]);for(const [el]of controls)el.disabled=true;try{await fn();}catch(e){$('switch-note').textContent=e.message;message(e.message,true);}finally{for(const [el,disabled]of controls)el.disabled=disabled;switchBusy=false;if(pcSelected)portCameraButtons();$('switch-apply').disabled=!$('switch-confirm').checked||!switchPlan;}}
 async function saveSwitchConnection(pin=false){
  const conn=switchConnection();if(pin){requireSavedSwitch();if(!switchInspection||switchInspection.switch_id!==conn.id)throw Error('현재 허브 상태를 먼저 조회하세요.');conn.expected_cpu_mac=switchInspection.identity.cpu_mac;}
  const result=await api('switch/config',conn);switches=result.switches||switches.filter(x=>x.id!==conn.id).concat([conn]);
- $('switch-select').replaceChildren();option($('switch-select'),'','새 허브 등록');for(const s of switches)option($('switch-select'),s.id,s.name+' · '+s.target);$('switch-select').value=conn.id;updateSwitchFields(result.connection||selectedSwitch()||conn);clearSwitchPlan();switchInspection=null;$('switch-identity').hidden=true;$('switch-state-panel').hidden=true;$('switch-management-panel').hidden=true;
+ $('switch-select').replaceChildren();option($('switch-select'),'','새 허브 등록');for(const s of switches)option($('switch-select'),s.id,s.name+' · '+s.target);$('switch-select').value=conn.id;updateSwitchFields(result.connection||selectedSwitch()||conn);clearSwitchPlan();switchInspection=null;$('switch-identity').hidden=true;$('switch-state-panel').hidden=true;$('switch-management-panel').hidden=true;renderUnknownHub();$('switch-candidate-result').replaceChildren();renderSwitchNetwork();
+ try{switchNetwork=await api('switch/config');renderSwitchInterfaces();renderSwitchNetwork();}catch(e){switchNetwork.connection_health=[];$('switch-network-state').textContent='접속 정보 저장은 완료했습니다. 현재 경로를 다시 조회하세요.';}
  $('switch-note').textContent=pin?'장비 MAC을 등록했습니다. 상태를 다시 조회하면 사용 가능한 변경 기능이 표시됩니다.':'접속 정보를 이 ED에 저장했습니다. 허브 설정은 아직 변경하지 않았습니다.';
 }
 function renderSwitch(result){
  switchInspection=result;clearSwitchPlan();const identity=result.identity||{};
  $('switch-identity').hidden=false;$('switch-identity-text').textContent=[identity.model,identity.cpu_mac,'펌웨어 '+(identity.firmware||'미확인'),'시리얼 '+(identity.serial||'—')].filter(Boolean).join(' · ');
  $('switch-pin').hidden=!!selectedSwitch()?.expected_cpu_mac||!result.supported;
- $('switch-note').textContent=result.can_modify?'허브 상태를 조회했습니다. 변경할 항목을 선택하면 적용 전 내용을 확인할 수 있습니다.':'읽기 전용 상태입니다. 장비 MAC·카메라 포트·접속 경로를 확인하세요.';
+ $('switch-note').textContent=result.can_modify?'허브 조회 완료':'조회 완료 · 설정 변경은 장비 MAC과 카메라 포트를 확인한 뒤 사용할 수 있습니다.';
  $('switch-ports').replaceChildren();
  for(const port of result.ports||[]){
-  const row=document.createElement('tr');for(const text of [String(port.port),({true:'연결됨',false:'연결 없음',up:'연결됨',down:'연결 없음',unknown:'미확인'}[String(port.link)]||'미확인'),port.admin_up===true?'켜짐':port.admin_up===false?'꺼짐':'미확인',String(port.pvid??'—')]){const td=document.createElement('td');td.textContent=text;row.append(td);}
-  const learned=document.createElement('td');learned.textContent=[...(port.macs||[]),...(port.cameras||[]).map(c=>c.name+' · '+c.ip)].join(' / ')||'—';row.append(learned);
+  const row=document.createElement('tr');row.id='hub-port-row-'+port.port;for(const text of [String(port.port),({true:'연결됨',false:'연결 없음',up:'연결됨',down:'연결 없음',unknown:'미확인'}[String(port.link)]||'미확인'),port.admin_up===true?'켜짐':port.admin_up===false?'꺼짐':'미확인',String(port.pvid??'—')]){const td=document.createElement('td');td.textContent=text;row.append(td);}
+  const learned=document.createElement('td');
+  renderLearnedDevices(learned,port);
+  row.append(learned);
   const controls=document.createElement('td');controls.className='file-actions';
+  const camera=registeredPortCamera(result,port.port);
+  if(camera||port.editable&&result.can_modify){
+   const open=document.createElement('button');open.type='button';open.className='small';open.textContent=camera&&!result.can_modify?'카메라 보기':'영상 · IP 설정';open.onclick=()=>selectPortCamera(port.port);controls.append(open);
+  }
   if(port.editable&&result.can_modify){
    for(const [state,label]of [['on','켜기'],['off','끄기'],['bounce','10초 재연결']]){const b=document.createElement('button');b.type='button';b.className='small';b.textContent=label;b.onclick=()=>switchAction(()=>planSwitch({action:'port',port:port.port,state}));controls.append(b);}
    const vlan=document.createElement('select');vlan.setAttribute('aria-label',port.port+'번 포트 VLAN');for(const n of result.camera_vlans||[])option(vlan,String(n),'VLAN '+n);vlan.value=String(port.pvid);const b=document.createElement('button');b.type='button';b.textContent='VLAN 변경';b.className='small';b.disabled=!vlan.options.length;b.onclick=()=>switchAction(()=>planSwitch({action:'vlan',port:port.port,vlan:Number(vlan.value)}));controls.append(vlan,b);
-  }else{controls.textContent=(port.reasons||[]).join(' · ')||'보호 포트';}
+  }else{
+   const reasons=(port.reasons||[]).map(reason=>reason==='카메라 포트로 등록하지 않음'?'제어할 카메라 포트로 지정하지 않음':reason);
+   if(reasons.length>1){
+    const details=document.createElement('details'),summary=document.createElement('summary');
+    details.className='port-list-details';
+    summary.textContent=port.port>=9?'광 업링크 보호':(result.ed_ports||[]).includes(port.port)?'ED 연결 보호':'제어 제한 사유';
+    details.append(summary,document.createTextNode(reasons.join(' · ')));controls.append(details);
+   }else controls.append(document.createTextNode(reasons[0]||'읽기 전용'));
+  }
   row.append(controls);$('switch-ports').append(row);
  }
  $('switch-camera-matches').replaceChildren();for(const c of result.camera_matches||[]){const row=document.createElement('tr');for(const value of [c.name+' · '+c.ip,c.mac||'미확인',(c.ports||[]).join(', ')||'—',c.reason||c.status]){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}$('switch-camera-matches').append(row);}
  $('switch-mapping-note').textContent=[result.camera_mapping_note,...(result.camera_mapping_warnings||[])].filter(Boolean).join(' / ');
+ renderSwitchDiagram(result);renderSwitchCandidates(result);if(pcSelected)refreshPortCameraPorts();
  $('switch-state-panel').hidden=false;$('switch-warnings').textContent=(result.warnings||[]).join(' / ');
  const m=result.management||{};$('switch-new-ip').value=m.ip||'';$('switch-netmask').value=m.netmask||'';$('switch-gateway').value=m.gateway||'';$('switch-management-panel').hidden=!result.can_modify;
 }
 async function inspectSwitch(){requireSavedSwitch();$('switch-note').textContent='허브 상태를 조회하고 있습니다…';renderSwitch(await api('switch/inspect',switchCredentials()));}
+$('switch-discover').onclick=()=>switchAction(async()=>{requireSavedSwitch();const ip=$('switch-candidate-ip').value.trim();if(!ip)throw Error('찾을 카메라 IP를 입력하세요.');$('switch-note').textContent='지정한 IP의 응답과 허브 포트를 대조하고 있습니다…';renderSwitch(await api('switch/inspect',{...switchCredentials(),candidate_ips:[ip]}));});
+function renderSwitchInterfaces(){
+ const el=$('switch-local-interface');el.replaceChildren();option(el,'','현재 ED 주소 선택');for(const [i,n]of (switchNetwork.local_interfaces||[]).entries())option(el,String(i),n.interface+' · '+n.source+'/'+n.prefixlen+(n.active?'':' · 인터페이스 꺼짐'));
+}
+function renderSwitchNetwork(){
+ const names=(switchNetwork.local_interfaces||[]).map(n=>n.interface+' = '+n.source+'/'+n.prefixlen);const saved=selectedSwitch(),health=(switchNetwork.connection_health||[]).find(h=>h.switch_id===saved?.id);
+ let note='현재 카메라용 ED 주소: '+(names.join(', ')||'설정된 IPv4 주소 없음');
+ if(switchNetwork.network_warnings?.length)note+='\n'+switchNetwork.network_warnings.join(' / ');
+ if(!saved)note+='\n허브 관리 IP와 계정을 입력해 저장하세요.';
+ else if(health)note+='\n허브 '+saved.target+': '+(health.route_ready?'직접 접속 경로 있음 (허브 응답은 상태 조회로 확인)':health.route_error+' 관리 VLAN을 쓰는 현장은 아래 ‘관리 VLAN 자동 연결 설정’을 확인하세요.');
+ note+='\n이 목록은 PC의 현재 주소입니다. 값을 선택하거나 접속 정보를 저장해도 PC의 IP·LTE 경로는 바뀌지 않습니다.';
+ $('switch-network-state').textContent=note;
+ if(saved&&health&&!health.route_ready){$('switch-connection-details').open=true;$('switch-note').textContent='허브에 접근할 관리 경로를 확인하세요.';}
+ fillSwitchNetworkSetup(saved,health);
+}
+function fillSwitchNetworkSetup(saved,health){
+ const interfaces=switchNetwork.local_interfaces||[];
+ const parents=[...new Set(interfaces.map(row=>row.parent).filter(Boolean))];
+ const found=interfaces.find(row=>row.interface===saved?.interface&&row.source===saved?.source);
+ const list=$('switch-physical-ports');list.replaceChildren();
+ for(const name of parents)option(list,name,name);
+ $('switch-network-parent').value=found?.parent||(parents.includes(saved?.interface)?saved.interface:parents.length===1?parents[0]:'');
+ $('switch-network-vlan').value=found?.vlan||'';
+ $('switch-network-source').value=found&&found.interface!==found.parent?found.source:'';
+ $('switch-management-network').open=Boolean(saved&&health&&!health.route_ready);
+ $('switch-network-terminal').hidden=true;
+ const hint=$('switch-network-setup-note');
+ if(!saved)hint.textContent='먼저 현장 이름, 허브 관리 IP, 현재 ED 랜포트와 허브 아이디를 입력하고 ‘접속 정보 저장’을 누르세요.';
+ else if(found?.interface==='nxmg100')hint.textContent='현재 임시 관리 경로가 열려 있습니다. 값을 확인한 뒤 임시 경로용 터미널에서 Enter를 눌러 종료하고 이 버튼을 누르세요.';
+ else hint.textContent='적용 시 이 ED의 우분투 관리자 승인이 필요할 수 있습니다.';
+}
+function validSetupIPv4(value){
+ const octets=value.split('.');
+ return octets.length===4&&octets.every(n=>/^(0|[1-9][0-9]{0,2})$/.test(n)&&Number(n)<=255);
+}
+function switchNetworkPayload(){
+ requireSavedSwitch();
+ const saved=selectedSwitch(),parent=$('switch-network-parent').value.trim(),source=$('switch-network-source').value.trim(),vlan=Number($('switch-network-vlan').value);
+ if(!/^enp2[0-9A-Za-z]*$/.test(parent))throw Error('허브에 연결된 enp2 랜포트를 입력하세요.');
+ if(!Number.isInteger(vlan)||vlan<1||vlan>4094)throw Error('관리 VLAN 번호를 1~4094 사이의 정수로 입력하세요.');
+ if(!validSetupIPv4(source)||source===saved.target)throw Error('허브 주소와 다른, 이 ED에 배정된 관리 IPv4를 입력하세요.');
+ return {switch_id:saved.id,parent,vlan,source};
+}
+function showNetworkTerminal(payload,target){
+ const row=(switchNetwork.local_interfaces||[]).find(n=>n.parent===payload.parent&&n.parent_mac)
+   ||(switchNetwork.local_interfaces||[]).find(n=>n.interface===payload.parent);
+ const mac=row?.parent_mac||row?.mac||'';
+ if(!/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac)||!validSetupIPv4(target))return;
+ $('switch-network-command').textContent='sudo python3 tools/switch_management_network.py --apply --parent '+payload.parent+' --parent-mac '+mac+' --vlan '+payload.vlan+' --source '+payload.source+' --target '+target;
+ $('switch-network-terminal').open=false;$('switch-network-terminal').hidden=false;
+}
+$('switch-network-setup').onclick=()=>switchAction(async()=>{
+ const status=$('switch-network-setup-note');
+ $('switch-network-terminal').hidden=true;
+ try{
+   const payload=switchNetworkPayload(),saved=selectedSwitch();
+   status.textContent=saved.name+' 허브 연결을 설정하고 있습니다. ED 화면에 관리자 승인 창이 열리면 확인하세요.';
+   try{await api('switch/network-setup',payload);}
+   catch(error){if(/인증|권한|승인|pkexec|polkit/i.test(error.message))showNetworkTerminal(payload,saved.target);throw error;}
+   try{await refreshSwitchConfig(saved.id);}
+   catch(error){throw Error('자동 연결 설정이 완료됐습니다. 접속 정보를 다시 불러오려면 화면을 새로고침하세요. '+error.message);}
+   $('switch-management-network').open=true;
+   status.textContent=saved.name+'의 관리 경로를 저장했습니다. 허브 비밀번호를 입력하고 ‘허브 상태 조회’를 누르세요.';
+ }catch(error){status.textContent=error.message;throw error;}
+});
+for(const id of ['switch-network-parent','switch-network-vlan','switch-network-source','switch-target']){
+ $(id).addEventListener('input',()=>{$('switch-network-terminal').hidden=true;});
+}
+$('switch-local-interface').onchange=()=>{const n=(switchNetwork.local_interfaces||[])[Number($('switch-local-interface').value)];if($('switch-local-interface').value===''||!n)return;$('switch-source').value=n.source;$('switch-interface').value=n.interface;clearSwitchPlan();$('switch-note').textContent='ED 접속 정보 입력란을 채웠습니다. 허브 관리 IP와 통신 가능한 대역인지 확인하고 저장하세요.';};
+function deviceLabel(device){
+ const kind={ed:'이 ED',camera:'등록 카메라',candidate:'조회한 장치',neighbor:'네트워크 장치',unknown:'IP 미확인'}[device.kind]||'장치';
+ const evidence=device.status==='cached'?' (이전 관측)':device.status==='ambiguous'?' (관측 불확실)':device.probe_fresh?' (ARP 응답)':['ed','unknown'].includes(device.kind)?'':' (캐시 대조)';
+ const name=device.kind==='camera'?device.name:'';
+ return [kind,name,...(device.ips?.length?device.ips:[device.ip])].filter(Boolean).join(' · ')+evidence;
+}
+function portInventory(port){
+ const groups=new Map(),ips=new Set();
+ for(const address of port.macs||[])groups.set(address.toLowerCase(),[]);
+ for(const device of port.connected_devices||[]){
+  const address=(device.mac||'').toLowerCase();
+  if(!groups.has(address))groups.set(address,[]);
+  groups.get(address).push(device);
+  for(const ip of device.ips?.length?device.ips:[device.ip])if(ip)ips.add(ip);
+ }
+ const known=rows=>rows.some(d=>d.ip||d.ips?.length);
+ const entries=[...groups.entries()].sort((a,b)=>Number(known(b[1]))-Number(known(a[1]))||a[0].localeCompare(b[0]));
+ const shared=port.port>=9||groups.size>1;
+ const summary=(port.port>=9?'광 업링크':'포트 관측')+' · 학습 MAC '+groups.size+'개 · 확인된 IP '+ips.size+'개';
+ return {entries,ips,shared,summary};
+}
+function renderLearnedDevices(cell,port){
+ const {entries,ips,shared,summary}=portInventory(port);
+ if(!entries.length){cell.textContent='학습된 MAC 없음';return;}
+ let list=cell;
+ if(shared){
+  const details=document.createElement('details'),title=document.createElement('summary');
+  details.className='port-list-details';title.textContent=summary;
+  list=document.createElement('div');list.className='port-devices';details.append(title,list);cell.append(details);
+  if(ips.size){
+   const preview=document.createElement('small');preview.className='port-ip-preview';
+   const sorted=[...ips].sort((a,b)=>a.localeCompare(b,'en',{numeric:true}));
+   preview.textContent=sorted.slice(0,4).join(' · ')+(sorted.length>4?' 외 '+(sorted.length-4)+'개':'');
+   cell.append(preview);
+  }
+ }
+ for(const [address,rows] of entries){
+  const item=document.createElement('div');
+  if(!rows.length||rows.every(d=>d.kind==='unknown')){
+   item.className='port-mac-only';item.textContent=(address||'MAC 미확인')+' · IP 미확인';
+  }else{
+   item.className='port-device-row';item.textContent=[...new Set(rows.map(deviceLabel))].join(' / ');
+   const detail=document.createElement('small');
+   detail.textContent=[address,...new Set(rows.map(d=>d.reason).filter(Boolean))].filter(Boolean).join(' · ');
+   item.append(detail);
+  }
+  list.append(item);
+ }
+}
+function renderUnknownHub(){if(pcSelected)closePortCamera();renderSwitchDiagram({preview:true,ports:Array.from({length:10},(_,i)=>({port:i+1,link:'unknown',admin_up:null,pvid:null,connected_devices:[]}))});}
+function markSelectedSwitchPort(port){
+ for(const button of $('switch-port-map').querySelectorAll('button[data-camera-port]')){
+  button.setAttribute('aria-pressed',String(port!==null&&Number(button.dataset.cameraPort)===port));
+ }
+}
+function openPortTable(number){
+ const row=$('hub-port-row-'+number);
+ if(!row)return;
+ $('switch-state-panel').open=true;
+ for(const old of $('switch-ports').querySelectorAll('.port-target'))old.classList.remove('port-target');
+ row.classList.add('port-target');row.tabIndex=-1;row.focus();
+}
+function renderSwitchDiagram(r){
+ const saved=selectedSwitch();
+ $('switch-diagram-panel').hidden=false;
+ $('switch-diagram-title').textContent=[saved?.name,r.identity?.model].filter(Boolean).join(' · ')||'허브';
+ $('switch-diagram-time').textContent=r.preview?'조회 전':new Date().toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit'})+' 조회';
+ const grid=$('switch-port-map');grid.replaceChildren();$('switch-port-guidance').textContent='';
+ for(const p of r.ports||[]){
+  const registered=r.preview?null:registeredPortCamera(r,p.port);
+  const isED=(r.ed_ports||[]).includes(p.port),isFiber=p.port>=9;
+  const state=r.preview?'조회 전':p.admin_up===false?'꺼짐':p.link==='up'?'연결됨':p.link==='down'?'링크 없음':'상태 미확인';
+  const card=document.createElement('div');card.className='hub-port-card';
+  const b=document.createElement('button');b.type='button';b.dataset.cameraPort=String(p.port);
+  b.setAttribute('aria-pressed',String(pcSelected?.port===p.port&&pcSelected?.switchId===saved?.id));
+  b.className='hub-port '+(isFiber?'fiber ':'')+(p.admin_up===false?'off':p.link==='up'?'up':'down');
+  const num=document.createElement('span');num.className='port-number';num.textContent=(isFiber?'광 ':'LAN ')+p.port;
+  const socket=document.createElement('span');socket.className='socket';socket.setAttribute('aria-hidden','true');num.append(socket);
+  const dev=document.createElement('span');dev.className='port-device';const inventory=portInventory(p);
+  const single=[...inventory.ips];
+  const evidence=registered?.status==='cached'?' · 이전 관측':'';
+  dev.textContent=registered?registered.ip:isED?'이 ED':isFiber?'광 업링크':single.length===1?single[0]:r.preview?'':inventory.shared?'여러 장치':p.link==='up'?'장치 미확인':'';
+  if(!dev.textContent)dev.setAttribute('aria-hidden','true');
+  const stat=document.createElement('span');stat.className='port-status';
+  const led=document.createElement('span');led.className='led';led.setAttribute('aria-hidden','true');stat.append(led,document.createTextNode(state+evidence));
+  b.append(num,dev,stat);
+  const portName=(isFiber?'광 ':'LAN ')+p.port;
+  const valid=!!registered||p.editable&&r.can_modify;
+  const action=valid?'포트 선택':r.preview?'조회 안내':'상세 정보';
+  b.title=portName+' · '+action;
+  b.setAttribute('aria-label',[portName,dev.textContent,state+evidence,action].filter(Boolean).join(' · '));
+  b.onclick=()=>{
+   if(valid)selectPortCamera(p.port);
+   else if(r.preview||((saved?.camera_ports||[]).includes(p.port)&&(!r.can_modify||!p.editable)))showPortPrerequisite(r,p);
+   else openPortTable(p.port);
+  };
+  card.append(b);
+  if(registered){
+   const play=document.createElement('button');play.type='button';play.className='hub-watch';play.textContent='영상 보기';
+   play.setAttribute('aria-label',portName+' '+registered.ip+' 영상 보기');
+   play.onclick=()=>playRegisteredPort(p.port);card.append(play);
+  }
+  grid.append(card);
+ }
+ const m=r.management||{};
+ $('switch-diagram-summary').textContent=r.preview?'허브 상태를 조회하면 포트별 장치와 영상 보기 버튼이 표시됩니다.':
+  ['ED 연결 '+((r.ed_ports||[]).map(n=>'LAN '+n).join(', ')||'미확인'), m.ip?'관리 IP '+m.ip:'',m.vlan?'관리 VLAN '+m.vlan:''].filter(Boolean).join('　·　');
+}
+function showPortPrerequisite(r,p){
+ const saved=selectedSwitch(),pin=!r.preview&&r.supported&&saved&&!saved.expected_cpu_mac;
+ const reason=r.preview?(saved?'허브 비밀번호를 입력하고 상태를 조회하세요.':'허브 접속 정보를 먼저 등록하세요.'):
+  pin?'허브의 모델과 CPU MAC을 확인한 뒤 이 장비를 관리 대상으로 지정하세요.':
+  [...(p.reasons||[]),...(r.warnings||[])].join(' · ')||'카메라 포트 등록과 ED 연결을 확인하세요.';
+ $('switch-port-guidance').textContent=p.port+'번 포트 · '+reason;$('switch-note').textContent=reason;
+ if(pin||!saved)$('switch-connection-details').open=true;
+ if(pin)$('switch-pin').focus();
+ else if(r.preview)$(saved?'switch-password':'switch-name').focus();
+ else openPortTable(p.port);
+}
+function renderSwitchCandidates(r){
+ const el=$('switch-candidate-result');el.replaceChildren();for(const c of r.candidate_matches||[]){const block=document.createElement('div');block.className='rule-explain';const title=document.createElement('strong');title.textContent=c.ip+' · '+(c.direct_port?'학습 포트 '+c.direct_port:(c.ports||[]).length?'관측 포트 '+c.ports.join(', '):'연결 포트 미확인');const desc=document.createElement('p');desc.textContent=[c.mac,c.reason].filter(Boolean).join(' · ');block.append(title,desc);if(c.status==='matched'&&c.probe_fresh&&c.direct_port&&c.mac){const b=document.createElement('button');b.type='button';b.textContent='이 장치의 카메라 IP 설정';b.onclick=()=>{const p=r.ports?.find(x=>x.port===c.direct_port);if(p?.editable&&r.can_modify)selectPortCamera(p.port,c.ip);else if(c.ip==='192.168.1.100')showPortPrerequisite(r,p||{port:c.direct_port});else openPortCamera(c,r);};block.append(b);}el.append(block);}for(const warning of r.discovery_warnings||[]){const p=document.createElement('p');p.textContent=warning;el.append(p);}
+}
+async function openPortCamera(c,r){
+ if(caBusy||busy||switchBusy){message('진행 중인 작업이 끝난 뒤 카메라를 선택하세요.',true);return;}
+ if(c.status!=='matched'||!c.probe_fresh||!c.direct_port||!c.mac){message('포트를 새로 조회해 장치를 확인하세요.',true);return;}
+ const context={ip:c.ip,mac:c.mac,port:c.direct_port,source:c.source||'',switchName:selectedSwitch()?.name||'허브',checkedAt:new Date().toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'})};
+ await showTab('camera-admin');if($('tab-camera-admin').hidden)return;cameraPortContext=context;const box=$('camera-port-context');box.hidden=false;box.textContent=context.switchName+' '+context.port+'번에서 학습된 장치 · '+context.ip+' · '+context.mac+' ('+context.checkedAt+' 조회). 아래에서 실제 카메라와 계정을 다시 확인하세요.';
+ setCameraMethod('direct');$('ca-address').value=c.ip;$('ca-login').value='';
+ $('ca-note').textContent='현재 카메라 비밀번호를 입력하고 카메라 조회를 누르세요.';
+ updateCameraPort(c.ip,c.mac);$('ca-secret').focus();
+
+}
+let pcSelected=null,pcIdentity=null,pcAccount=null,pcPlan=null,pcViewed=false,pcBusy=false;
+let pcPlayback=null;
+function registeredPortCamera(result,port){
+ const lan=result?.ports?.find(row=>row.port===port);
+ if(result?.preview||!lan||lan.port>8||(result.ed_ports||[]).includes(port)||lan.mode!=='access'||lan.link!=='up'||lan.admin_up!==true)return null;
+ const matches=(result.camera_matches||[]).filter(row=>row.direct_port===port);
+ if(matches.length!==1)return null;
+ const camera=matches[0];
+ if(!['matched','cached'].includes(camera.status)||!camera.name||!camera.mac||!camera.ip||camera.ip==='192.168.1.100')return null;
+ return camera;
+}
+function clearPortCameraPlan(){
+ pcPlan=null;$('pc-plan').hidden=true;$('pc-confirm').checked=false;$('pc-apply').disabled=true;
+}
+function resetPortCameraAccount(){
+ if(liveStarting||liveSession)stopLive();
+ pcPlayback=null;pcAccount=null;pcViewed=false;clearPortCameraPlan();
+ $('pc-network').hidden=true;$('pc-new-ip').value='';$('pc-mask').value='';$('pc-gateway').value='';$('pc-defer').checked=false;
+ $('pc-view-hint').textContent='먼저 위에서 실시간 영상을 확인하세요.';
+}
+function resetPortCameraIdentity(){
+ resetPortCameraAccount();pcIdentity=null;$('pc-identity').textContent='';$('pc-account').hidden=true;$('pc-activation').hidden=true;
+ for(const id of ['pc-password','pc-new-password','pc-repeat'])$(id).value='';
+ $('pc-user').value='';portCameraButtons();
+}
+function closePortCamera(){
+ if(!pcSelected)return;
+ pcSelected=null;resetPortCameraIdentity();
+ $('live-display-home').append($('live-display'));$('port-camera-panel').hidden=true;
+ $('pc-peers').replaceChildren();$('pc-isolated').checked=false;$('pc-note').textContent='';
+ markSelectedSwitchPort(null);
+}
+function selectPortCamera(port,ip){
+ if(pcBusy||switchBusy)return;
+ const result=switchInspection,saved=selectedSwitch();
+ const selected=result?.ports?.find(p=>p.port===port),registered=registeredPortCamera(result,port);
+ const editable=!!(result?.can_modify&&selected?.editable);
+ if(!saved||!selected||(!editable&&!registered))return;
+ if(!pcSelected||pcSelected.port!==port||pcSelected.switchId!==saved.id||(ip&&$('pc-current-ip').value!==ip)){
+  closePortCamera();
+  const address=ip||registered?.ip||'';
+  pcSelected={port,switchId:saved.id,registered,peers:new Set(address==='192.168.1.100'?(saved.camera_ports||[]).filter(n=>n!==port):[])};
+  $('pc-current-ip').value=address;$('pc-isolated').checked=false;
+  $('pc-install').open=editable&&(!registered||!!ip);$('pc-isolation').open=address==='192.168.1.100';
+  $('pc-title').textContent='LAN '+port+' · '+(registered?.name||'카메라');
+  $('pc-player').append($('live-display'));$('live-note').textContent='';$('pc-note').textContent='';
+  resetPortCameraIdentity();refreshPortCameraPorts();
+ }else if(ip&&editable){$('pc-install').open=true;}
+ markSelectedSwitchPort(port);
+ $('port-camera-panel').hidden=false;$('port-camera-panel').scrollIntoView({block:'start',behavior:'smooth'});
+}
+function registeredPreviewMode(){
+ return !!pcSelected?.registered&&!$('pc-install').open;
+}
+function portCameraButtons(){
+ if(!pcSelected)return;
+ const registered=registeredPreviewMode(), profile=$('pc-profile'), playing=!!liveSession||liveStarting;
+ const camera=pcSelected.registered,address=$('pc-current-ip').value.trim();
+ const showsRegistered=camera&&(registered||camera.ip===address);
+ $('pc-title').textContent='LAN '+pcSelected.port+' · '+(showsRegistered?camera.name:'카메라');
+ $('pc-device').textContent=registered?camera.ip+' · '+(camera.probe_fresh?'ARP 응답으로 포트 대조':'마지막 허브 조회에서 대조한 주소'):
+  (pcIdentity?pcIdentity.ip+' · MAC '+pcIdentity.mac:address?address+' · 포트 확인 전':'현재 카메라 IP를 입력하세요.');
+ if(registered&&profile.dataset.source!=='registered'){
+  profile.replaceChildren();option(profile,'auto','HD 우선');option(profile,'current','저장된 프로필');profile.dataset.source='registered';
+ }
+ if(!registered&&profile.dataset.source==='registered'){profile.replaceChildren();profile.dataset.source='';}
+ $('pc-profile-label').hidden=!registered&&!pcAccount;
+ $('pc-identify').disabled=!$('pc-isolated').checked||!$('pc-current-ip').value.trim();
+ $('pc-play').disabled=pcBusy||switchBusy||playing||(!registered&&(!pcAccount||!profile.value));
+ $('pc-stop').hidden=!playing;$('pc-stop').disabled=!playing;
+ $('pc-standby').hidden=playing;
+ $('pc-open-setup').hidden=registered||playing||!!pcAccount;
+ $('pc-video-help').textContent=registered?'등록 주소 '+pcSelected.registered.ip+'의 실시간 영상을 재생합니다.':
+  !pcIdentity?'현재 IP로 포트와 카메라를 확인하면 영상을 열 수 있습니다.':
+  !pcIdentity.initialized?'최초 관리자 비밀번호를 설정한 뒤 영상을 열 수 있습니다.':
+  !pcAccount?'카메라 계정을 확인하면 영상 보기가 활성화됩니다.':
+  !profile.value?'카메라에서 H.264 프로필을 설정한 뒤 계정을 다시 확인하세요.':'확인한 카메라의 H.264 영상을 재생합니다.';
+ $('pc-ip-plan').disabled=!pcAccount||!pcViewed||!$('pc-new-ip').value.trim();
+ $('pc-apply').disabled=!pcPlan||!$('pc-confirm').checked;
+ $('pc-factory-address').hidden=$('pc-current-ip').value==='192.168.1.100';
+ $('pc-peer-count').textContent=pcSelected.peers.size?'· '+pcSelected.peers.size+'개':'';
+}
+function setupPortAddress(){
+ $('pc-isolated').checked=false;resetPortCameraIdentity();
+ pcSelected.peers=new Set($('pc-current-ip').value.trim()==='192.168.1.100'?(selectedSwitch()?.camera_ports||[]).filter(n=>n!==pcSelected.port):[]);
+ $('pc-isolation').open=pcSelected.peers.size>0;
+ refreshPortCameraPorts();
+}
+function playRegisteredPort(port){
+ selectPortCamera(port);
+ if(pcBusy||switchBusy||pcSelected?.port!==port||!pcSelected.registered)return;
+ if($('pc-install').open){$('pc-install').open=false;resetPortCameraIdentity();}
+ portCameraButtons();playPortVideo();
+}
+function playPortVideo(){
+ if(!pcSelected||pcBusy||switchBusy||liveSession||liveStarting)return;
+ if(registeredPreviewMode()){
+  const selection=pcSelected,camera=selection.registered,profile=$('pc-profile').value;
+  pcPlayback='registered';
+  startLive(async()=>{
+   const epoch=liveEpoch;
+   const {cameras}=await api('live/cameras');
+   const matches=(cameras||[]).filter(row=>row.name===camera.name&&row.ip===camera.ip);
+   if(matches.length!==1)throw Error('등록 주소가 달라졌습니다. 허브 상태를 다시 조회하세요.');
+   if(epoch!==liveEpoch||pcSelected!==selection||pcSelected.registered!==camera||!registeredPreviewMode()||pcPlayback!=='registered')throw Error('선택한 포트가 변경되었습니다.');
+   return api('live/start',{camera:camera.name,profile:profile==='auto'&&matches[0].can_select_profile?'2':'current'});
+  });
+ }else if(pcIdentity&&pcAccount&&$('pc-profile').value){
+  pcPlayback='bound';
+  startLive(()=>portCameraRequest('live',{...portCameraCredentials(),profile:$('pc-profile').value}));
+ }
+}
+function portControlButton(port){
+ const state=port.admin_up===false?'on':'off',b=document.createElement('button');
+ b.type='button';b.className='small';b.textContent=port.port+'번 '+(state==='on'?'켜기':'끄기');
+ b.disabled=!port.editable||port.admin_up==null;
+ b.onclick=()=>switchAction(async()=>{
+  resetPortCameraIdentity();$('pc-isolated').checked=false;portCameraButtons();
+  await planSwitch({action:'port',port:port.port,state});
+ });
+ return b;
+}
+function refreshPortCameraPorts(){
+ const s=pcSelected,r=switchInspection,saved=selectedSwitch();
+ if(!s)return;
+ const target=r?.ports?.find(p=>p.port===s.port);
+ const registered=registeredPortCamera(r,s.port),editable=!!(r?.can_modify&&target?.editable);
+ if(s.switchId!==saved?.id||(!editable&&!registered)){closePortCamera();return;}
+ const changed=registered?.name!==s.registered?.name||registered?.ip!==s.registered?.ip||registered?.mac!==s.registered?.mac;
+ if(changed){
+  resetPortCameraIdentity();s.registered=registered;
+  $('pc-isolated').checked=false;$('pc-install').open=editable&&!registered;
+  $('pc-current-ip').value=registered?.ip||'';
+  s.peers=new Set((registered?[]:saved.camera_ports||[]).filter(n=>n!==s.port));
+ }
+ if(!editable)$('pc-install').open=false;
+ $('pc-install').hidden=!editable;$('pc-readonly-note').hidden=editable;
+ $('pc-readonly-note').textContent=editable?'':'이 포트에서는 등록 카메라의 영상만 확인할 수 있습니다.';
+
+ const state=p=>p.admin_up===false?'꺼짐':p.link==='up'?'연결됨':p.link==='down'?'링크 없음':'상태 미확인';
+ $('pc-selected-state').replaceChildren(document.createTextNode(s.port+'번 · '+state(target)+' '),portControlButton(target));
+ $('pc-peers').replaceChildren();
+ for(const no of (saved.camera_ports||[]).filter(n=>n!==s.port)){
+  const row=r.ports.find(p=>p.port===no);
+  const group=document.createElement('div'),label=document.createElement('label'),check=document.createElement('input');
+  label.className='switch';check.type='checkbox';check.checked=s.peers.has(no);
+  check.onchange=()=>{if(check.checked)s.peers.add(no);else s.peers.delete(no);$('pc-isolated').checked=false;resetPortCameraIdentity();};
+  label.append(check,document.createTextNode(no+'번 · '+(row?state(row):'미확인')));group.append(label);
+  if(row)group.append(portControlButton(row));$('pc-peers').append(group);
+ }
+ portCameraButtons();
+}
+function portCameraBase(){
+ requireSavedSwitch();if(!pcSelected||selectedSwitch()?.id!==pcSelected.switchId||!$('pc-isolated').checked)throw Error('허브·대상 포트와 같은 IP 카메라의 분리 상태를 다시 확인하세요.');
+ return {switch_id:pcSelected.switchId,port:pcSelected.port,ip:$('pc-current-ip').value.trim(),peer_ports:[...pcSelected.peers].sort((a,b)=>a-b),isolated:true,switch_password:$('switch-password').value};
+}
+function portCameraRequest(action,fields={}){
+ const base=portCameraBase();
+ if(action!=='identify'){
+  if(!pcIdentity?.binding_id)throw Error('선택한 포트와 카메라를 다시 확인하세요.');
+  Object.assign(base,{binding_id:pcIdentity.binding_id,expected_mac:pcIdentity.mac,expected_cert_sha256:pcIdentity.cert_sha256});
+ }
+ return api('port-camera/'+action,{...base,...fields});
+}
+function portCameraCredentials(){return {username:$('pc-user').value.trim(),password:$('pc-password').value};}
+async function portCameraAction(note,fn){
+ if(pcBusy||switchBusy||!pcSelected)return;
+ pcBusy=true;$('pc-controls').disabled=true;
+ const siblings=[...$('tab-switch').children].filter(el=>el.id!=='port-camera-panel');for(const el of siblings)el.inert=true;
+ $('pc-note').textContent=note;
+ try{await fn();}catch(e){$('pc-note').textContent=e.message;message(e.message,true);}
+ finally{pcBusy=false;$('pc-controls').disabled=false;for(const el of siblings)el.inert=false;portCameraButtons();}
+}
+$('pc-close').onclick=closePortCamera;
+$('pc-current-ip').oninput=setupPortAddress;
+$('pc-factory-address').onclick=()=>{$('pc-current-ip').value='192.168.1.100';setupPortAddress();};
+$('pc-open-setup').onclick=()=>{
+ $('pc-install').open=true;
+ const next=!pcIdentity?($('pc-isolated').checked?'pc-identify':'pc-current-ip'):pcIdentity.initialized?'pc-password':'pc-new-password';
+ $(next).focus();$(next).scrollIntoView({block:'center'});
+};
+$('pc-install').ontoggle=()=>{
+ if(!pcSelected)return;
+ if($('pc-install').open&&pcPlayback==='registered'&&registeredPreviewMode()===false){
+  if(liveSession||liveStarting)stopLive();pcPlayback=null;$('live-note').textContent='';
+ }else if(!$('pc-install').open&&(pcIdentity||pcPlayback==='bound')){
+  resetPortCameraIdentity();$('live-note').textContent='';
+ }
+ portCameraButtons();
+};
+$('pc-isolated').onchange=resetPortCameraIdentity;
+$('pc-identify').onclick=()=>portCameraAction('포트와 현재 응답 장치를 대조하고 있습니다…',async()=>{
+ resetPortCameraIdentity();const r=await portCameraRequest('identify');
+ if(!r.binding_id||!r.mac||!r.cert_sha256||Number(r.port)!==pcSelected.port)throw Error('포트와 카메라의 일치를 확인하지 못했습니다. 배선과 같은 IP 카메라의 분리 상태를 확인하세요.');
+ pcIdentity=r;$('pc-identity').textContent=r.port+'번 포트 · '+r.ip+' · MAC '+r.mac;
+ $('pc-account').hidden=!r.initialized;$('pc-activation').hidden=!!r.initialized;
+ $('pc-note').textContent=r.initialized?'포트와 카메라를 확인했습니다. 현재 계정을 입력하세요.':'이 카메라는 최초 관리자 비밀번호 설정이 필요합니다.';
+});
+function showPortCameraPlan(type,p,summary){
+ if(!(type==='activation'?p.token:p.plan_id))throw Error('변경 내용을 확인하지 못했습니다.');
+ pcPlan={type,data:p};$('pc-confirm').checked=false;$('pc-plan-text').textContent=[pcSelected.port+'번 포트 · '+pcIdentity.mac,summary,...(p.warnings||[])].join('\n');
+ $('pc-plan').hidden=false;$('pc-note').textContent='변경 내용을 검토하고 적용해 주세요.';
+}
+$('pc-activation-plan').onclick=()=>portCameraAction('최초 비밀번호 설정 대상을 확인하고 있습니다…',async()=>{
+ clearPortCameraPlan();const password=$('pc-new-password').value;if(!password||password!==$('pc-repeat').value)throw Error('새 비밀번호를 두 칸에 동일하게 입력하세요.');
+ const p=await portCameraRequest('activation-plan');showPortCameraPlan('activation',p,pcIdentity.ip+'의 admin 최초 비밀번호를 설정합니다.');
+});
+for(const id of ['pc-new-password','pc-repeat','pc-new-ip','pc-mask','pc-gateway','pc-defer'])$(id).addEventListener('input',()=>{clearPortCameraPlan();portCameraButtons();});
+for(const id of ['pc-user','pc-password'])$(id).addEventListener('input',()=>{resetPortCameraAccount();portCameraButtons();});
+$('pc-account-check').onclick=()=>portCameraAction('현재 계정으로 카메라를 확인하고 있습니다…',async()=>{
+ resetPortCameraAccount();const r=await portCameraRequest('account',portCameraCredentials());
+ pcAccount=r;$('pc-mask').value=r.network.netmask||'';$('pc-gateway').value=r.network.gateway||'';
+ const profiles=(r.profiles||[]).filter(p=>String(p.EncodingType||'').toUpperCase().replace(/[^A-Z0-9]/g,'')==='H264');
+ const sel=$('pc-profile');sel.replaceChildren();sel.dataset.source='factory';
+ for(const p of profiles)option(sel,String(p.id),p.id+'번 · '+[p.Name,p.Resolution].filter(Boolean).join(' · '));
+ if(profiles.some(p=>Number(p.id)===2))sel.value='2';if(!profiles.length)option(sel,'','H.264 프로필 없음');
+ $('pc-network').hidden=false;$('live-note').textContent='';
+ $('pc-note').textContent=(r.identity?.Model||'카메라')+' · 계정 확인 완료';
+ $('pc-view').scrollIntoView({block:'center',behavior:'smooth'});
+});
+$('pc-play').onclick=playPortVideo;
+$('pc-stop').onclick=()=>stopLive();
+$('pc-profile').onchange=()=>{if(liveSession||liveStarting)stopLive();};
+$('live-video').addEventListener('playing',()=>{
+ if(pcSelected&&pcPlayback==='bound'&&pcAccount&&liveSession&&$('pc-player').contains($('live-video'))){
+  pcViewed=true;$('pc-view-hint').textContent=pcSelected.port+'번 카메라 영상 확인됨. 이 카메라에 할당할 새 IP를 입력하세요.';portCameraButtons();
+ }
+});
+$('pc-ip-plan').onclick=()=>portCameraAction('새 IP와 변경 대상을 확인하고 있습니다…',async()=>{
+ if(!pcAccount||!pcViewed)throw Error('선택한 포트의 영상을 먼저 확인하세요.');
+ clearPortCameraPlan();const fields={...portCameraCredentials(),new_ip:$('pc-new-ip').value.trim(),netmask:$('pc-mask').value.trim(),gateway:$('pc-gateway').value.trim(),defer_reconnect:$('pc-defer').checked};
+ const p=await portCameraRequest('ip-plan',fields);showPortCameraPlan('ip',p,pcIdentity.ip+' → '+fields.new_ip+' · 마스크 '+fields.netmask+' · 게이트웨이 '+(fields.gateway||'없음')+(fields.defer_reconnect?' · 새 IP 재접속 생략':''));
+});
+$('pc-confirm').onchange=portCameraButtons;$('pc-cancel').onclick=clearPortCameraPlan;
+$('pc-apply').onclick=()=>portCameraAction('선택한 포트를 다시 확인하고 변경을 적용하고 있습니다…',async()=>{
+ if(!pcPlan||!$('pc-confirm').checked)return;
+ const {type,data}=pcPlan;clearPortCameraPlan();
+ if(liveSession||liveStarting)await stopLive();
+ if(type==='activation'){
+  const r=await portCameraRequest('activation-apply',{confirm:true,token:data.token,new_password:$('pc-new-password').value,confirm_password:$('pc-repeat').value});
+  resetPortCameraIdentity();$('pc-note').textContent=(r.message||'최초 비밀번호를 설정했습니다.')+' 같은 포트를 다시 확인하고 새 계정으로 영상을 확인하세요.';return;
+ }
+ const nextIp=$('pc-new-ip').value.trim();
+ const r=await portCameraRequest('ip-apply',{plan_id:data.plan_id,confirm:true});
+ const labels={applied:'새 IP에서 동일 카메라 확인 완료',accepted_unverified:'변경 요청 전송 · 새 주소 확인 필요',rejected:'카메라가 요청을 거부했습니다',failed:'변경 결과 확인 필요',rolled_back:'기존 주소로 복구'};
+ const result=[nextIp,labels[r.status]||r.status,r.detail||r.message,r.backup_path?'백업 '+r.backup_path:''].filter(Boolean).join(' · ');
+ resetPortCameraIdentity();$('pc-isolated').checked=false;
+ $('pc-note').textContent=result+(r.status==='applied'?' · 다음 카메라 포트를 선택하고 같은 방법으로 진행하세요.':'');
+});
+for(const id of ['switch-name','switch-target','switch-source','switch-interface','switch-user','switch-mac','switch-camera-ports','switch-password']){
+ $(id).addEventListener('input',()=>{if(pcSelected)closePortCamera();});
+}
 function switchPlanText(plan){
  const labels={port:'포트',state:'상태',admin_up:'포트 사용',vlan:'VLAN',pvid:'VLAN',ip:'관리 IP',netmask:'서브넷 마스크',gateway:'관리 게이트웨이',source:'ED 접속 IP',mode:'포트 모드',target:'접속 주소'};
  function summary(value){if(value===null||value===undefined)return'—';if(typeof value!=='object')return String(value);return Object.entries(value).filter(([k,v])=>labels[k]&&typeof v!=='object').map(([k,v])=>labels[k]+': '+(typeof v==='boolean'?(v?'켜짐':'꺼짐'):v)).join(' / ')||JSON.stringify(value);}
@@ -554,10 +1445,13 @@ $('switch-cancel').onclick=clearSwitchPlan;
 $('switch-apply').onclick=()=>switchAction(async()=>{
  if(!switchPlan||!$('switch-confirm').checked)return;
  requireSavedSwitch();if(switchPlan.switch_id!==selectedSwitch()?.id)throw Error('선택한 허브가 바뀌었습니다. 변경 내용을 다시 확인하세요.');
+ const portReturn=pcSelected&&switchPlan.action==='port';
+ if(pcSelected){resetPortCameraIdentity();$('pc-isolated').checked=false;}
  const id=switchPlan.plan_id;clearSwitchPlan();$('switch-note').textContent='설정 백업 후 변경을 적용하고 있습니다. 완료까지 기다려 주세요.';
  const r=await api('switch/apply',{plan_id:id,password:$('switch-password').value,confirm:true});
  if(r.inspection){const conn=r.inspection.connection;if(conn){switches=switches.map(s=>s.id===conn.id?conn:s);updateSwitchFields(conn);const choice=Array.from($('switch-select').options).find(o=>o.value===conn.id);if(choice)choice.textContent=conn.name+' · '+conn.target;}renderSwitch(r.inspection);}
- else{switchInspection=null;$('switch-state-panel').hidden=true;$('switch-management-panel').hidden=true;}
+ else{switchInspection=null;closePortCamera();$('switch-state-panel').hidden=true;$('switch-management-panel').hidden=true;}
+ if(portReturn&&pcSelected){$('port-camera-panel').scrollIntoView({block:'start'});$('pc-note').textContent=r.status==='applied'?'포트 상태를 갱신했습니다. 같은 IP로 한 대만 연결됐는지 확인하세요.':(r.detail||'포트 변경 결과를 확인하세요.');}
  $('switch-note').textContent=({applied:'적용 완료',rolled_back:'적용 실패 후 원래 설정으로 복구',failed:'적용 상태 확인 필요'}[r.status]||r.status)+' · '+(r.detail||'')+(r.backup_path?' · 백업: '+r.backup_path:'');message($('switch-note').textContent,r.status!=='applied');
 });
 for(const id of [...Object.values(switchFields),'switch-camera-ports','switch-new-ip','switch-netmask','switch-gateway'])$(id).addEventListener('input',clearSwitchPlan);

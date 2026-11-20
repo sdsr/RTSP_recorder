@@ -23,6 +23,42 @@ class _CameraAdminAuthError(CameraAdminError):
     pass
 
 
+class _CameraAdminWriteRejected(CameraAdminError):
+    """The camera explicitly refused the request."""
+
+
+def _ca_write_rejection(status, text):
+    """Return only protocol codes and known field names; never copy arbitrary camera text."""
+    http_refusal = status in (400, 403, 404, 405, 409, 422, 429)
+    first = _ca_re.search(r'^(?:\ufeff)?[ \t]*(?:NG\b|(?:Error|ErrorCode)[ \t]*=)', text, _ca_re.I | _ca_re.M)
+    if not http_refusal and (status != 200 or not first):
+        return None
+    errors = [] if not first else [line.strip() for line in text[first.start():first.start()+4096].lstrip('\ufeff').splitlines()
+                                  if _ca_re.match(r'^\s*(?:NG\b|(?:Error|ErrorCode)\s*=)', line, _ca_re.I)]
+    parts = ['HTTP ' + str(status)]
+    known_codes = ('InvalidParameter', 'InvalidValue', 'InvalidRequest', 'InvalidOperation',
+                   'MissingParameter', 'UnsupportedParameter', 'NotSupported', 'OutOfRange',
+                   'BadRequest', 'PermissionDenied', 'Unauthorized', 'InternalError')
+    known_fields = ('InterfaceName', 'IPv4Type', 'IPv4Address', 'IPv4SubnetMask', 'IPv4PrefixLength',
+                    'IPv4Gateway', 'Index', 'UserID', 'Password', 'IsPasswordEncrypted')
+    for line in errors:
+        match = _ca_re.match(r'(?:NG\s*\[|(?:Error|ErrorCode)\s*=)\s*([^\]:,;]+)', line, _ca_re.I)
+        if match:
+            value = match[1].strip()
+            normalized = _ca_re.sub(r'[\s_-]', '', value).lower()
+            code = next((item for item in known_codes if item.lower() == normalized), None)
+            if _ca_re.fullmatch(r'-?[0-9]{1,5}|0x[0-9a-fA-F]{1,4}', value):
+                code = value
+            if code and ('CGI ' + code) not in parts:
+                parts.append('CGI ' + code)
+        for name in known_fields:
+            if name not in parts and _ca_re.search(r'\b' + name + r'\b', line, _ca_re.I):
+                parts.append(name)
+    if errors and len(parts) == 1:
+        parts.append('CGI 오류')
+    return _CameraAdminWriteRejected('카메라가 변경 요청을 거부했습니다 (' + ', '.join(parts) + ').')
+
+
 def _ca_route(host):
     try:
         return _cai_route(host)
@@ -100,7 +136,11 @@ class CameraAdminClient(WisenetProfileClient):
             raise CameraAdminError('허용되지 않은 카메라 관리 요청입니다.')
         if any('password' in key.lower() for key in params if key != 'IsPasswordEncrypted'):
             raise CameraAdminError('비밀번호를 카메라 주소의 쿼리에 넣을 수 없습니다.')
-        if method == 'POST' and (not isinstance(body, bytes) or not 1 <= len(body) <= 16384):
+        # The device's own admin form sends only Index and UserID for a rename.
+        rename_only = (pair == ('/stw-cgi/security.cgi', 'users', 'update', 'POST')
+                       and set(params) == {'msubmenu', 'action', 'Index', 'UserID'}
+                       and params['Index'] == '0' and body == b'')
+        if method == 'POST' and not rename_only and (not isinstance(body, bytes) or not 1 <= len(body) <= 16384):
             raise CameraAdminError('암호화된 변경 요청을 확인하지 못했습니다.')
         uri = path + ('?' + _ca_urlencode(params) if params else '')
         for attempt in range(2):
@@ -142,14 +182,18 @@ class CameraAdminClient(WisenetProfileClient):
                     raise _CameraAdminAuthError('카메라 인증이 거부되었습니다. 자동으로 다시 로그인하지 않습니다.')
                 self.challenge = challenge
                 continue
+            if pair in writes and status in (400, 403, 404, 405, 409, 422, 429):
+                raise _ca_write_rejection(status, raw[:4096].decode('utf-8-sig', errors='replace'))
             if status != 200 or len(raw) > 4 * 1024 * 1024:
                 raise CameraAdminError('카메라 관리 요청이 거부되었거나 응답이 너무 큽니다.')
             try:
                 text = raw.decode('utf-8-sig')
             except UnicodeError:
                 raise CameraAdminError('카메라 응답을 읽을 수 없습니다.') from None
-            if pair in writes and _ca_re.search(r'(?:^|\n)\s*(?:Error|ErrorCode)\s*=|NG\s*\[', text, _ca_re.I):
-                raise CameraAdminError('카메라가 변경 요청을 거부했습니다.')
+            if pair in writes:
+                rejection = _ca_write_rejection(status, text)
+                if rejection:
+                    raise rejection
             return text
         raise CameraAdminError('카메라 인증을 완료하지 못했습니다.')
 
@@ -178,9 +222,17 @@ class CameraAdminClient(WisenetProfileClient):
             'Index': str(snapshot['user']['index']), 'UserID': username, 'IsPasswordEncrypted': 'True'},
             method='POST', body=body.encode('ascii'))
 
+    def update_username(self, snapshot, username):
+        params = {'msubmenu': 'users', 'action': 'update',
+                  'Index': str(snapshot['user']['index']), 'UserID': username}
+        return self.request('/stw-cgi/security.cgi', params, method='POST', body=b'')
+
     def update_network(self, desired, interface_name):
+        if interface_name != 'NetworkInterface1':
+            raise CameraAdminError('조회한 카메라의 네트워크 인터페이스를 확인하세요.')
+        # This camera's SUNAPI setter accepts IPv4 settings on its single interface.
+        # InterfaceName is returned by the read API; the OEM form sends it only for NVRs.
         return self.get('/stw-cgi/network.cgi', dict(msubmenu='interface', action='set',
-            InterfaceName=interface_name,
             IPv4Type='Manual', IPv4Address=desired['ip'], IPv4SubnetMask=desired['netmask'],
             IPv4Gateway=desired['gateway']))
 
@@ -219,7 +271,8 @@ def _ca_capabilities(cgis, attributes):
     prefix = network.find("parameter[@name='IPv4PrefixLength']/dataType/int") if network is not None else None
     return {'network': {'IPv4Type', 'IPv4Address', 'IPv4SubnetMask', 'IPv4Gateway'} <= net_params,
             'password': {'Index', 'UserID', 'Password', 'IsPasswordEncrypted'} <= user_params,
-            'can_change_username': features.get('AdminIDChangeable') == 'True',
+            'can_change_username': (features.get('AdminIDChangeable') == 'True'
+                                    and {'Index', 'UserID'} <= user_params),
             'current_password_verification': features.get('CurrentPasswordVerification') in ('Optional', 'Mandatory', 'True'),
             'new_password_policy': features.get('NewPasswordPolicy') == 'True',
             'password_maximum': int(password.get('maxlen', '0')) if password is not None else 0,
@@ -262,6 +315,7 @@ class CameraAdminManager:
         self.client_factory = client_factory or CameraAdminClient
         self._route = _ca_route
         self._available = lambda ip, route: _camera_admin_address_available(ip, route)
+        self._handover_available = _camera_admin_handover_available
         self._probe = lambda ip, route: _camera_admin_duplicate_probe(ip, route)
         self._snapshot = _ca_snapshot
         self._lock = _ca_threading.RLock()
@@ -318,13 +372,53 @@ class CameraAdminManager:
             client = self.client_factory(camera['url'])
             return self._public(camera['name'], client, self._observe(client))
 
-    def _observe(self, client):
+    def _observe(self, client, expected_mac=None):
         route = self._route(client.host)
+        if expected_mac is not None:
+            route = dict(route, expected_mac=_cai_mac(expected_mac))
         probe = self._probe(client.host, route)
+        if expected_mac is not None and probe['mac'].lower() != route['expected_mac']:
+            raise CameraAdminError('선택한 포트의 카메라와 현재 IP의 MAC이 다릅니다. 장비를 다시 조회하세요.')
         snapshot = self._snapshot(client)
         if probe['mac'].lower() != snapshot['identity']['ConnectedMACAddress'].lower():
             raise CameraAdminError('ARP 응답과 카메라 장치 MAC이 다릅니다. 같은 IP의 중복 장치를 확인하세요.')
         return snapshot
+
+    def _candidate(self, payload):
+        if self._closed or self.controller.closing:
+            raise CameraAdminError('카메라 관리 서비스가 종료되었습니다.')
+        if not isinstance(payload, dict):
+            raise CameraAdminError('카메라 조회 입력 형식이 올바르지 않습니다.')
+        host = _cai_ip(payload.get('ip'))
+        username, password = payload.get('username'), payload.get('password')
+        if (not isinstance(username, str) or not _ca_re.fullmatch(r'[A-Za-z0-9_.-]{1,8}', username)
+                or not isinstance(password, str) or not 1 <= len(password) <= 64
+                or any(ord(c) < 32 or ord(c) == 127 for c in password)):
+            raise CameraAdminError('현재 카메라 관리 계정을 입력하세요.')
+        mac = _cai_mac(payload.get('expected_mac'))
+        certificate = payload.get('expected_cert_sha256')
+        if not isinstance(certificate, str) or not _ca_re.fullmatch(r'[0-9a-fA-F]{64}', certificate):
+            raise CameraAdminError('먼저 초기 설정 조회에서 MAC·인증서 정보를 확인하세요.')
+        url = _ca_url('rtsp://admin:placeholder@' + host + ':554/profile4/media.smp',
+                      username=username, password=password)
+        client = self.client_factory(url)
+        client.certificate = certificate.lower()
+        snapshot = self._observe(client, expected_mac=mac)
+        self._expected(payload, client, snapshot)
+        return url, client, snapshot
+
+    def inspect_candidate(self, payload):
+        """Authenticate one discovered camera without registering it or storing credentials."""
+        with self.controller.action_lock, self._lock:
+            _, client, snapshot = self._candidate(payload)
+            profiles = _camera_profile_rows(client.get('/stw-cgi/media.cgi', {'msubmenu': 'videoprofile', 'action': 'view'}))
+            result = self._public(None, client, snapshot)
+            result.update(registered=False, credentials_saved=False, route=self._route(client.host),
+                profiles=[{'id': int(profile), **{key: values[key] for key in
+                    ('Name', 'EncodingType', 'Resolution', 'FrameRate') if key in values}}
+                    for profile, values in sorted(profiles.items(), key=lambda row: int(row[0]))],
+                detail='장비와 현재 설정만 확인했습니다. 계정 저장·카메라 변경은 수행하지 않았습니다.')
+            return result
 
     @staticmethod
     def _expected(payload, client, snapshot):
@@ -351,27 +445,37 @@ class CameraAdminManager:
                 raise CameraAdminError('카메라 지원 범위 안의 호스트 IP와 서브넷을 입력하세요.')
             if gateway != _ca_ipaddress.IPv4Address('0.0.0.0') and (gateway not in network or gateway in (ip, network.network_address, network.broadcast_address)):
                 raise CameraAdminError('게이트웨이는 새 카메라 대역 안의 다른 호스트 주소여야 합니다. 사용하지 않으면 0.0.0.0으로 지정하세요.')
-            route = self._route(str(ip))
-            if _ca_ipaddress.IPv4Address(route['source']) not in network or route['source'] == str(ip):
-                raise CameraAdminError('ED의 enp2 소스 IP가 새 카메라 대역에 없거나 카메라 IP와 같습니다.')
             old_route = self._route(client.host)
-            if route['parent'] != old_route['parent'] or route['dev'] != old_route['dev']:
-                raise CameraAdminError('변경 전후 카메라는 같은 enp2 인터페이스로 접근해야 합니다.')
-            if str(ip) != client.host:
-                self._available(str(ip), route)
+            if payload.get('defer_reconnect') is True:
+                old_network = _ca_ipaddress.IPv4Network(client.host + '/' + snapshot['network']['netmask'], strict=False)
+                if ip in old_network or _ca_ipaddress.IPv4Address(client.host) in network:
+                    raise CameraAdminError('같은 대역에서는 새 IP 재접속을 확인하는 일반 IP 변경을 사용하세요.')
+                self._handover_available(str(ip), old_route)
+            else:
+                route = self._route(str(ip))
+                if _ca_ipaddress.IPv4Address(route['source']) not in network or route['source'] == str(ip):
+                    raise CameraAdminError('ED의 enp2 소스 IP가 새 카메라 대역에 없거나 카메라 IP와 같습니다. 기존 주소를 유지한 채 새 대역의 ED 보조 IP와 직접 경로를 먼저 준비해야 합니다. LTE 경로는 사용하지 않습니다.')
+                if route['parent'] != old_route['parent'] or route['dev'] != old_route['dev']:
+                    raise CameraAdminError('변경 전후 카메라는 같은 enp2 인터페이스로 접근해야 합니다.')
+                if str(ip) != client.host:
+                    self._available(str(ip), route)
             desired = {'ip': str(ip), 'netmask': str(network.netmask), 'gateway': str(gateway), 'mode': 'Manual'}
             if desired == snapshot['network']:
                 raise CameraAdminError('변경할 네트워크 설정이 없습니다.')
             return desired
-        if action == 'password':
+        if action in ('password', 'username'):
             caps = snapshot['capabilities']
-            if not caps['password']:
-                raise CameraAdminError('이 카메라의 계정 변경 API를 확인하지 못했습니다.')
+            if action == 'password' and not caps['password']:
+                raise CameraAdminError('이 카메라의 비밀번호 변경 API를 확인하지 못했습니다.')
             username = payload.get('new_username') or client.username
             if not isinstance(username, str) or not _ca_re.fullmatch(r'[A-Za-z0-9_.-]{1,8}', username):
                 raise CameraAdminError('관리 아이디는 영문·숫자·밑줄·마침표·하이픈 1~8자로 입력하세요.')
             if username != client.username and not caps['can_change_username']:
                 raise CameraAdminError('이 카메라는 관리 아이디 변경을 지원하지 않습니다.')
+            if action == 'username':
+                if username == client.username:
+                    raise CameraAdminError('현재 아이디와 다른 새 아이디를 입력하세요.')
+                return {'username': username, 'password_changed': False}
             _camera_admin_password(payload.get('new_password'), payload.get('confirm_password'), username=username,
                                    maximum=min(64, caps['password_maximum']), tta=caps.get('new_password_policy', False))
             if payload['new_password'] == client.password and username == client.username:
@@ -382,26 +486,60 @@ class CameraAdminManager:
     def plan(self, payload):
         self._payload(payload)
         with self.controller.action_lock, self._lock:
-            data, revision, index, camera = self._camera(payload.get('camera'))
-            client = self.client_factory(camera['url'])
-            before = self._observe(client)
+            direct = 'direct_target' in payload
+            action = payload.get('action')
+            deferred = payload.get('defer_reconnect', False)
+            if type(deferred) is not bool or (deferred and (not direct or action != 'network')):
+                raise CameraAdminError('새 IP 재접속을 나중에 확인하는 옵션은 직접 입력한 카메라의 IP 변경에서만 사용할 수 있습니다.')
+            warnings = ['적용 전에 예약 대기를 포함한 녹화와 실시간 재생을 중지하세요.',
+                        '센터·NVR·다른 ED의 접속 정보는 자동으로 변경하지 않습니다.']
+            if deferred:
+                warnings.append('현재 주소로 IP 변경을 한 번 요청합니다. 새 IP 접속과 녹화기 주소 갱신은 새 대역이 준비된 후 별도로 확인하세요.')
+            if direct:
+                if action not in ('network', 'username') or payload.get('isolated') is not True:
+                    raise CameraAdminError('대상 IP의 카메라 한 대를 확인하고 IP 또는 아이디 변경을 선택하세요.')
+                data, revision = self.controller.read_config()
+                rows = data.get('cameras', 'auto')
+                if rows == 'auto':
+                    rows = []
+                if not isinstance(rows, list) or not all(isinstance(row, dict) and isinstance(row.get('url'), str) for row in rows):
+                    raise CameraAdminError('카메라 포트에서 주소를 변경하려면 녹화기의 직접 IP 설정을 확인하세요.')
+                url, client, before = self._candidate(payload['direct_target'])
+                existing = [row for row in rows if _ca_urlsplit(row['url']).hostname == client.host]
+                if existing:
+                    data, revision, index, camera = self._camera(existing[0]['name'])
+                    stored = _ca_urlsplit(camera['url'])
+                    if (_ca_unquote(stored.username or ''), _ca_unquote(stored.password or '')) != (client.username, client.password):
+                        raise CameraAdminError('이 IP가 다른 계정으로 녹화기에 등록되어 있습니다. 장비 설정의 저장 계정을 먼저 확인하세요.')
+                else:
+                    index, camera = None, {'name': client.host, 'url': url}
+            else:
+                data, revision, index, camera = self._camera(payload.get('camera'))
+                client = self.client_factory(camera['url'])
+                before = self._observe(client)
             self._expected(payload, client, before)
             desired = self._desired(payload, before, client)
-            self._configured_ip(data, index, payload['action'], desired)
+            if index is not None:
+                self._configured_ip(data, index, action, desired)
+            else:
+                if action == 'network' and any(_ca_urlsplit(row['url']).hostname == desired['ip'] for row in rows):
+                    warnings.append('새 IP는 녹화기에 이미 등록된 주소입니다. 해당 카메라를 교체하는 경우에만 적용하세요.')
+                warnings.append('이 카메라의 접속 정보는 녹화기에 따로 등록되지 않습니다.')
             token = _ca_secrets.token_urlsafe(32)
             now = _ca_time.monotonic()
             self._plans = {key: row for key, row in self._plans.items() if now - row['created'] < 300}
             if len(self._plans) >= 16:
                 raise CameraAdminError('변경 미리보기가 너무 많습니다. 잠시 후 다시 시도하세요.')
-            action = payload['action']
             public = {'plan_id': token, 'camera': camera['name'], 'action': action, 'expires_seconds': 300,
                 'camera_host': client.host, 'identity': before['identity'],
                 'before': before['network'] if action == 'network' else {'username': client.username},
-                'after': desired, 'warnings': ['적용 전에 예약 대기를 포함한 녹화와 실시간 재생을 중지하세요.',
-                    '센터·NVR·다른 ED의 접속 정보는 자동으로 변경하지 않습니다.']}
+                'after': desired, 'recorder_will_update': index is not None and not deferred,
+                'defer_reconnect': deferred, 'warnings': warnings}
             self._plans[token] = {'created': now, 'camera': camera['name'], 'revision': revision,
                 'url_hash': _ca_hashlib.sha256(camera['url'].encode()).hexdigest(), 'snapshot': before,
                 'client': client, 'action': action, 'desired': desired, 'public': public,
+                'defer_reconnect': deferred,
+                'standalone_url': camera['url'] if index is None else None,
                 'password_hash': _ca_hashlib.sha256(payload['new_password'].encode()).hexdigest() if action == 'password' else None}
             return public
 
@@ -439,7 +577,8 @@ class CameraAdminManager:
         root.mkdir(mode=0o700, exist_ok=True)
         directory = root / (_ca_time.strftime('%Y%m%d_%H%M%S') + '_' + _ca_secrets.token_hex(8))
         directory.mkdir(mode=0o700)
-        _ca_private_write(directory / 'recording_before.json', _ca_Path(self.controller.config_path).read_bytes())
+        if not entry.get('standalone_url'):
+            _ca_private_write(directory / 'recording_before.json', _ca_Path(self.controller.config_path).read_bytes())
         safe = {'camera': entry['camera'], 'before': entry['snapshot'], 'change': entry['public']}
         _ca_private_write(directory / 'before.json', _ca_json.dumps(safe, ensure_ascii=False, indent=2).encode())
         return directory
@@ -485,7 +624,7 @@ class CameraAdminManager:
                           username=username, password=password)
             client = self.client_factory(url)
             client.certificate = payload['expected_cert_sha256'].lower()
-            snapshot = self._observe(client)
+            snapshot = self._observe(client, expected_mac=payload['expected_mac'])
             self._expected(payload, client, snapshot)
             profiles = _camera_profile_rows(client.get('/stw-cgi/media.cgi', {'msubmenu': 'videoprofile', 'action': 'view'}))
             if str(profile) not in profiles:
@@ -508,6 +647,39 @@ class CameraAdminManager:
                 result['detail'] += ' 결과 파일 저장에 실패했습니다.'
             return result
 
+    def _handover(self, client, before, desired):
+        """Send once to the pinned old address; report only what that device acknowledged."""
+        result = {'previous_host': client.host, 'expected_mac': before['identity']['ConnectedMACAddress'],
+                  'camera_change_verified': False, 'device_acknowledged': None, 'write_attempted': False,
+                  'status': 'unverified', 'detail': '변경 요청이 전달됐는지 확인할 수 없습니다. 새 대역에서 확인하세요.'}
+        if not client.challenge:
+            raise CameraAdminError('현재 IP에서 관리자 인증을 다시 확인한 뒤 적용하세요.')
+        client.allow_writes = True
+        try:
+            acknowledgement = client.update_network(desired, before['interface_name'])
+            if isinstance(acknowledgement, str) and acknowledgement.strip() == 'OK':
+                result.update(status='accepted_unverified', device_acknowledged=True,
+                              detail='카메라가 IP 변경 요청에 OK를 보냈습니다. 새 IP 접속은 새 대역에서 확인하세요.')
+        except (_CameraAdminAuthError, _CameraAdminWriteRejected) as exc:
+            result.update(status='rejected', device_acknowledged=False, detail=str(exc))
+        except CameraAdminError:
+            # A device may drop the connection while assigning its new address.
+            pass
+        finally:
+            client.allow_writes = False
+            result['write_attempted'] = client.write_attempted
+        if not result['write_attempted']:
+            result['detail'] = '기존 IP의 카메라에 변경 요청을 보내지 못했습니다. 기존 주소에서 다시 조회하세요.'
+        return result
+
+    @staticmethod
+    def _store_result(backup, result):
+        try:
+            _ca_private_write(backup / 'result.json', _ca_json.dumps(result, ensure_ascii=False, indent=2).encode())
+        except OSError:
+            result['detail'] += ' 결과 파일 저장에도 실패했습니다.'
+        return result
+
     def apply(self, payload):
         self._payload(payload)
         with self.controller.action_lock, self._lock, self._idle():
@@ -518,43 +690,62 @@ class CameraAdminManager:
             entry = self._plans.pop(payload.get('plan_id'), None)
             if entry is None or _ca_time.monotonic() - entry['created'] >= 300:
                 raise CameraAdminError('변경 미리보기가 만료되었거나 사용되었습니다. 다시 조회하세요.')
-            data, revision, index, camera = self._camera(entry['camera'])
-            if revision != entry['revision'] or _ca_hashlib.sha256(camera['url'].encode()).hexdigest() != entry['url_hash']:
-                raise CameraAdminError('녹화 설정이 변경되었습니다. 다시 미리보기를 만드세요.')
             client = entry['client']
-            before = self._observe(client)
+            if entry.get('standalone_url'):
+                _, revision = self.controller.read_config()
+                index = None
+                url = entry['standalone_url']
+            else:
+                data, revision, index, camera = self._camera(entry['camera'])
+                url = camera['url']
+            if revision != entry['revision'] or _ca_hashlib.sha256(url.encode()).hexdigest() != entry['url_hash']:
+                raise CameraAdminError('녹화 설정이 변경되었습니다. 다시 미리보기를 만드세요.')
+            before = self._observe(client, expected_mac=entry['snapshot']['identity']['ConnectedMACAddress'])
             if before != entry['snapshot']:
                 raise CameraAdminError('카메라 식별정보 또는 설정이 변경되었습니다. 다시 조회하세요.')
-            check = dict(camera=entry['camera'], action=entry['action'])
+            deferred = entry.get('defer_reconnect', False)
+            check = dict(camera=entry['camera'], action=entry['action'], defer_reconnect=deferred)
             if entry['action'] == 'network':
                 check.update(entry['desired'])
-                new_url = _ca_url(camera['url'], host=entry['desired']['ip'])
+                new_url = _ca_url(url, host=entry['desired']['ip'])
             else:
-                password = payload.get('new_password')
-                if not isinstance(password, str) or _ca_hashlib.sha256(password.encode()).hexdigest() != entry['password_hash']:
-                    raise CameraAdminError('미리보기와 동일한 새 비밀번호를 입력하세요.')
+                if entry['action'] == 'username':
+                    password = client.password
+                else:
+                    password = payload.get('new_password')
+                    if not isinstance(password, str) or _ca_hashlib.sha256(password.encode()).hexdigest() != entry['password_hash']:
+                        raise CameraAdminError('미리보기와 동일한 새 비밀번호를 입력하세요.')
                 check.update(new_password=password, confirm_password=payload.get('confirm_password'),
                              new_username=entry['desired']['username'])
-                new_url = _ca_url(camera['url'], username=entry['desired']['username'], password=password)
+                new_url = _ca_url(url, username=entry['desired']['username'], password=password)
             self._desired(check, before, client)
-            self._configured_ip(data, index, entry['action'], entry['desired'])
-            proposed = _ca_json.loads(_ca_json.dumps(data))
-            proposed['cameras'][index]['url'] = new_url
-            settings_from_data(proposed, _ca_Path(self.controller.config_path).parent)
+            if index is not None:
+                self._configured_ip(data, index, entry['action'], entry['desired'])
+            if index is not None and not deferred:
+                proposed = _ca_json.loads(_ca_json.dumps(data))
+                proposed['cameras'][index]['url'] = new_url
+                settings_from_data(proposed, _ca_Path(self.controller.config_path).parent)
             backup = self._backup(entry)
             changed_verified, write_attempted = False, False
             result = {'camera': entry['camera'], 'host': _ca_urlsplit(new_url).hostname,
                       'recorder_updated': False, 'backup_path': str(backup)}
+            if deferred:
+                result.update(self._handover(client, before, entry['desired']))
+                return self._store_result(backup, result)
             try:
                 client.allow_writes = True
                 write_attempted = True
                 try:
                     if entry['action'] == 'network':
                         client.update_network(entry['desired'], before['interface_name'])
+                    elif entry['action'] == 'username':
+                        client.update_username(before, entry['desired']['username'])
                     else:
-                        client.update_password(before, entry['desired']['username'], payload['new_password'])
-                except _CameraAdminAuthError:
-                    raise
+                        client.update_password(before, entry['desired']['username'], password)
+                except (_CameraAdminAuthError, _CameraAdminWriteRejected) as exc:
+                    result.update(status='rejected', device_acknowledged=False, camera_change_verified=False,
+                                  write_attempted=getattr(client, 'write_attempted', True), detail=str(exc))
+                    return self._store_result(backup, result)
                 except CameraAdminError:
                     # An IP/password update may end its own HTTPS connection.
                     # Verify once at the intended address; never repeat a write.
@@ -564,23 +755,26 @@ class CameraAdminManager:
                     write_attempted = getattr(client, 'write_attempted', write_attempted)
                 verify = self.client_factory(new_url)
                 verify.certificate = before['certificate_sha256']
-                after = self._observe(verify)
+                after = self._observe(verify, expected_mac=before['identity']['ConnectedMACAddress'])
                 if after['identity'] != before['identity'] or after['certificate_sha256'] != before['certificate_sha256']:
                     raise CameraAdminError('변경 후 카메라 식별정보가 일치하지 않습니다.')
                 expected_network = entry['desired'] if entry['action'] == 'network' else before['network']
                 expected_user = dict(before['user']['fields'])
-                if entry['action'] == 'password':
+                if entry['action'] in ('username', 'password'):
                     expected_user['UserID'] = entry['desired']['username']
                 if (after['network'] != expected_network or after['user']['index'] != before['user']['index']
                         or after['user']['fields'] != expected_user):
                     raise CameraAdminError('변경 후 설정이나 계정 권한을 확인하지 못했습니다.')
                 changed_verified = True
-                _, current_revision = self.controller.read_config()
-                if current_revision != revision:
-                    raise CameraAdminError('카메라 변경 중 녹화 설정이 다른 곳에서 수정되었습니다.')
-                atomic_private_text(self.controller.config_path, _ca_json.dumps(proposed, ensure_ascii=False, indent=2) + '\n', require_private=True)
-                self._invalidate_settings()
-                result.update(status='applied', recorder_updated=True, detail='카메라 변경과 재접속을 확인하고 이 ED의 녹화 주소를 갱신했습니다.')
+                if index is None:
+                    result.update(status='applied', detail='카메라 변경과 새 접속 정보로 재접속을 확인했습니다.')
+                else:
+                    _, current_revision = self.controller.read_config()
+                    if current_revision != revision:
+                        raise CameraAdminError('카메라 변경 중 녹화 설정이 다른 곳에서 수정되었습니다.')
+                    atomic_private_text(self.controller.config_path, _ca_json.dumps(proposed, ensure_ascii=False, indent=2) + '\n', require_private=True)
+                    self._invalidate_settings()
+                    result.update(status='applied', recorder_updated=True, detail='카메라 변경과 재접속을 확인하고 이 ED의 녹화 주소를 갱신했습니다.')
             except Exception:
                 result.update(status='camera_changed_local_pending' if changed_verified else 'unverified',
                     detail=('카메라 변경과 새 계정·주소 접속은 확인했지만 녹화 설정 갱신에 실패했습니다. 이 ED의 접속 정보를 직접 수정하세요.'
@@ -589,11 +783,11 @@ class CameraAdminManager:
                             if write_attempted else '카메라에 변경 요청을 보내지 못했습니다. 새 정보를 다시 확인하세요. 자동 재시도하지 않았습니다.'))
             result['camera_change_verified'] = changed_verified
             result['write_attempted'] = write_attempted
-            try:
-                _ca_private_write(backup / 'result.json', _ca_json.dumps(result, ensure_ascii=False, indent=2).encode())
-            except OSError:
-                result['detail'] += ' 결과 파일 저장에도 실패했습니다.'
-            return result
+            return self._store_result(backup, result)
+
+    def discard_plan(self, token):
+        with self._lock:
+            self._plans.pop(token, None)
 
     def close(self):
         with self._lock:

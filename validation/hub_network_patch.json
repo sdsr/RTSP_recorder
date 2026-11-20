@@ -1,0 +1,77 @@
+{
+  "release_version": "2026-11-20-v2.6",
+  "upstream_version": "20261120-switch-network",
+  "update_zip_sha256": "fae8ff4ed7452cab1c69a664d1ba9a1126025090f60da90eff9bfb1c53b57f65",
+  "base_commit": "c3af0214e0ff836f1a48bf77c81d6bd0a05c88dd",
+  "scope": "Integrated management VLAN persistence, switch-port workflows and preview with the deployed first-run and recording behavior.",
+  "files": {
+    "ui.html": {
+      "upstream_sha256": "86502f3e36649918b92dd1f33b81d6b5ddbc6d3bd43580c42b64b176d3229a3b",
+      "integrated_sha256": "2ef8fc7b55751c43870a0935e1b48c8b7a3f85aa540f6f19069d4ac1fe1acac6"
+    },
+    "build_embedded.py": {
+      "upstream_sha256": "a2fdce4ca4a1e82d49a37037f18895316adc88975d5acfac745c9a704a5d606f",
+      "integrated_sha256": "a2fdce4ca4a1e82d49a37037f18895316adc88975d5acfac745c9a704a5d606f"
+    },
+    "weather_regions.json": {
+      "upstream_sha256": "57bce886e6f1a48a897111afaf8f1c9ca7f5e800e3da87d26fe47aa85fb676a4",
+      "integrated_sha256": "57bce886e6f1a48a897111afaf8f1c9ca7f5e800e3da87d26fe47aa85fb676a4"
+    },
+    "components/weather.py": {
+      "upstream_sha256": "ca4b5c756b9ccf69647dc053f02f139b87c6f0455f76547c501bf84ae143ec4b",
+      "integrated_sha256": "812b1d19b2ec97067a63d220bcbe46811d0fa367c448aa9bec9fb71565016344"
+    },
+    "components/public_weather.py": {
+      "upstream_sha256": "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a",
+      "integrated_sha256": "d171fb9e0b8c9c57cb7f739c9fc75041fc78bd8fd5a26ab75132a5d4a933a70a"
+    },
+    "components/live_view.py": {
+      "upstream_sha256": "59ae189623da7232f7aa228c4ccf1c4d349208fa044d96d8b817202dea70da0b",
+      "integrated_sha256": "a211baa38a6e579053f6abe85e754799cddbe279954ad7322a7a5f811b3f3c92"
+    },
+    "components/camera_profiles.py": {
+      "upstream_sha256": "229ffeae65107c94565f0f9e099cebf8b740245b17438e0a0f0e018a6a443605",
+      "integrated_sha256": "2d586be6a8d40966595b1d20eb7f9b14df0158f81aca1dcf029a214ccbd46dc2"
+    },
+    "components/camera_ping.py": {
+      "upstream_sha256": "a10e38bc224aa73ee35a54d67f4d283fbe7d0411552363ca7fda2f25ce79409e",
+      "integrated_sha256": "bde8ecd25b2cb00fb6f2883a794f03bbd3ea3d5f9cc5212fea80d65147adb6bf"
+    },
+    "components/camera_snapshots.py": {
+      "upstream_sha256": "6dd9878009c8b1f3c8a322448c60262823c824fa53b48b82ca298e731c4f4be5",
+      "integrated_sha256": "9150be22b6595d572546c98603cf8a5b289165d3a8443e357dc48045457cc917"
+    },
+    "components/camera_activation.py": {
+      "upstream_sha256": "81f33558da8e4f1549b5edf0e9fe784efd25b140c3ef5ad7f24000dce978c758",
+      "integrated_sha256": "f64d6ddb74dcbdba2db78fb73943e541f9486e7b244d96699353976fe85e58a8"
+    },
+    "components/camera_admin.py": {
+      "upstream_sha256": "7be0c07224c0b6b906d9888e9e836f58a251187a1bdd16e5cadf9d635f96665e",
+      "integrated_sha256": "afa981f790f29f8ce662c4f3154f7a8451f90355e51e77d8c69564233b7ea823"
+    },
+    "components/switch_manager.py": {
+      "upstream_sha256": "cda009edf7fa29a6dc8cb8774e9d480ccbf6c1ead75c35269d1230d5021fcabc",
+      "integrated_sha256": "297c9fe39c3838e8785f0ac1e6e1ff124d2aa79c774812f84a9ed4b5f6d070ad"
+    },
+    "components/ui_server.py": {
+      "upstream_sha256": "1bab187cef600a655081d79cb6130f6058166852e26cd9501155190cfed2599d",
+      "integrated_sha256": "d1fbb3a38ed115c67ed07cf43c57df62831c6fe9b4319468cac0a690ae813821"
+    },
+    "components/desktop_launcher.py": {
+      "upstream_sha256": "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075",
+      "integrated_sha256": "6051b8fc15d1dadc2d3938d8feb7304c0d2fa508e03d9d14708003f8601d6075"
+    },
+    "components/desktop_gui.py": {
+      "upstream_sha256": "193a6382ca98fe30cc60771ead5ae5f5fcb74951af5489638085d0aff87bcb1c",
+      "integrated_sha256": "da7b5165ec577c2fc93dbbe156b6045a22bdc145a16bbef68d51698861709fa9"
+    },
+    "tools/switch_management_network.py": {
+      "upstream_sha256": "cb7efa29432ab12a10add461b77c77c8bd838ac2b6b6c57d351fe5161d2e2bcd",
+      "integrated_sha256": "126fcf2eaf4e37ce33c1a302ffd92be0a4eedd1fbdf3052294b820a62cfaf95a"
+    },
+    "record.py": {
+      "upstream_sha256": "eb69202415cc508308657be7fe65191de10ee243f940620490e29611b041b99c",
+      "integrated_sha256": "493edf389249cd7a2a1322440ad564441a961a411486ddd68c8de44057f99b08"
+    }
+  }
+}
